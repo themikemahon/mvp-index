@@ -327,7 +327,9 @@ export function CursorResponsiveFilaments({
           }
           
           filamentsRef.current.push(filament)
-          groupRef.current?.add(mesh)
+          if (groupRef.current) {
+            groupRef.current.add(mesh)
+          }
         }
       }
     }
@@ -355,7 +357,9 @@ export function CursorResponsiveFilaments({
         
         // Remove expired filaments
         if (filament.age > filament.maxAge) {
-          groupRef.current?.remove(filament.mesh)
+          if (groupRef.current && filament.mesh) {
+            groupRef.current.remove(filament.mesh)
+          }
           filament.geometry?.dispose()
           filament.material?.dispose()
           return false
@@ -368,10 +372,11 @@ export function CursorResponsiveFilaments({
   
   // Cleanup on unmount
   useEffect(() => {
+    const currentGroupRef = groupRef.current
     return () => {
       filamentsRef.current.forEach(filament => {
         if (filament.mesh) {
-          groupRef.current?.remove(filament.mesh)
+          currentGroupRef?.remove(filament.mesh)
         }
         filament.geometry?.dispose()
         filament.material?.dispose()

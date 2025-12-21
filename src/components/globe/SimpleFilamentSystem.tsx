@@ -101,6 +101,7 @@ export function SimpleFilamentSystem({
         canvas.removeEventListener('mouseleave', handleMouseLeave)
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataPoints, isLoading, intensity, opacity, enableCursorTrail, gl])
   
   // Mouse event handlers

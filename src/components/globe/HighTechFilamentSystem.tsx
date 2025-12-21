@@ -360,9 +360,10 @@ export function HighTechFilamentSystem({
     particleSystemRef.current = particleSystem
     groupRef.current.add(particleSystem)
     
+    const currentGroupRef = groupRef.current
     return () => {
-      groupRef.current?.remove(ribbonMesh)
-      groupRef.current?.remove(particleSystem)
+      currentGroupRef?.remove(ribbonMesh)
+      currentGroupRef?.remove(particleSystem)
     }
   }, [ribbonGeometry, ribbonMaterial, particleGeometry, particleMaterial])
   

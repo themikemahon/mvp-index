@@ -108,7 +108,8 @@ export function FilamentSystem({
       canvas.removeEventListener('mouseenter', handleMouseEnter)
       canvas.removeEventListener('mouseleave', handleMouseLeave)
     }
-  }, [camera, gl, enableParticles, enableCursorTrail, enableFilaments, intensity])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camera, gl, enableParticles, enableCursorTrail, enableFilaments, intensity, enableBloom])
   
   // Create filament paths around the globe
   const createFilamentPaths = useCallback(() => {

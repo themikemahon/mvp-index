@@ -1,14 +1,24 @@
 import OpenAI from 'openai';
 import { ProcessedQuery, ThreatFilters, ThreatType, Coordinates } from '@/types/threat';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 // Cache for query results
 const queryCache = new Map<string, { result: ProcessedQuery; timestamp: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Lazy initialization of OpenAI client
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openai && process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  if (!openai) {
+    throw new Error('OpenAI API key not configured');
+  }
+  return openai;
+}
 
 export class QueryProcessor {
   /**
@@ -55,6 +65,8 @@ export class QueryProcessor {
       activeFilters?: ThreatFilters;
     }
   ): Promise<ProcessedQuery> {
+    const client = getOpenAIClient();
+    
     const systemPrompt = `You are a cybersecurity threat intelligence query processor. 
     Extract geographic and topical intent from user queries about cyber threats.
     
@@ -91,7 +103,7 @@ export class QueryProcessor {
     ${context ? `Current context: viewing ${context.currentView.lat}, ${context.currentView.lng} at zoom ${context.currentView.zoom}` : ''}
     ${context?.activeFilters ? `Active filters: ${JSON.stringify(context.activeFilters)}` : ''}`;
 
-    const completion = await openai.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },

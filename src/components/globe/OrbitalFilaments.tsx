@@ -495,8 +495,10 @@ export function OrbitalFilaments({
         }
         
         filamentsRef.current.push(filament)
-        groupRef.current?.add(mesh)
-        groupRef.current?.add(particles)
+        if (groupRef.current) {
+          groupRef.current.add(mesh)
+          groupRef.current.add(particles)
+        }
       }
     }
     
@@ -542,8 +544,10 @@ export function OrbitalFilaments({
         
         // Remove expired filaments
         if (filament.age > filament.maxAge) {
-          groupRef.current?.remove(filament.mesh)
-          groupRef.current?.remove(filament.particles)
+          if (groupRef.current) {
+            if (filament.mesh) groupRef.current.remove(filament.mesh)
+            if (filament.particles) groupRef.current.remove(filament.particles)
+          }
           filament.geometry?.dispose()
           filament.material?.dispose()
           filament.particleGeometry?.dispose()
@@ -558,13 +562,14 @@ export function OrbitalFilaments({
   
   // Cleanup on unmount
   useEffect(() => {
+    const currentGroupRef = groupRef.current
     return () => {
       filamentsRef.current.forEach(filament => {
         if (filament.mesh) {
-          groupRef.current?.remove(filament.mesh)
+          currentGroupRef?.remove(filament.mesh)
         }
         if (filament.particles) {
-          groupRef.current?.remove(filament.particles)
+          currentGroupRef?.remove(filament.particles)
         }
         filament.geometry?.dispose()
         filament.material?.dispose()
