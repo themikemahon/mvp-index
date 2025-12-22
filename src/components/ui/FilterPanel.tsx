@@ -58,9 +58,7 @@ export default function FilterPanel({
       'France', 'China', 'Japan', 'India', 'Russia', 'Australia'
     ],
     brands: [
-      'Microsoft', 'Apple', 'Google', 'Amazon', 'Meta', 'Tesla', 'Netflix',
-      'Adobe', 'Salesforce', 'Oracle', 'IBM', 'Intel', 'NVIDIA', 'Cisco',
-      'PayPal', 'Visa', 'Mastercard', 'JPMorgan', 'Bank of America'
+      'Norton', 'LifeLock', 'Avast', 'MoneyLion', 'Gen'
     ],
     topics: [
       'Malware', 'Phishing', 'Ransomware', 'Data Breach', 'Identity Theft',
