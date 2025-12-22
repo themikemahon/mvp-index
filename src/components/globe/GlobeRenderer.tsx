@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, forwardRef, useImperativeHandle, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { ZoomController, ZoomLevel } from './ZoomController'
 import { SmoothZoomControls } from './SmoothZoomControls'
@@ -22,6 +23,118 @@ interface GlobeRendererProps {
 
 export interface GlobeRendererRef {
   navigateToLocation: (lat: number, lng: number, distance?: number) => void
+}
+
+// Earth Model Component - Production Version
+function EarthModel() {
+  const { scene, materials } = useGLTF('/models/Earth_1_12756.glb')
+  const earthRef = useRef<THREE.Group>(null)
+
+  // Clone the scene to avoid issues with multiple instances
+  const clonedScene = scene.clone()
+
+  // Ensure materials are properly configured for maximum brightness
+  useEffect(() => {
+    if (materials) {
+      Object.values(materials).forEach((material: any) => {
+        if (material.isMeshStandardMaterial || material.isMeshBasicMaterial) {
+          material.needsUpdate = true
+          // Ensure the material is visible
+          material.transparent = false
+          material.opacity = 1
+          // Maximum lighting response for brightness
+          if (material.isMeshStandardMaterial) {
+            material.roughness = 0.2  // Very smooth for maximum reflection
+            material.metalness = 0.2  // More metallic for better light response
+            // Add strong emissive glow to make it much brighter
+            material.emissive = new THREE.Color(0x223344)  // Stronger blue glow
+            material.emissiveIntensity = 0.2
+            // Boost the material's response to lighting
+            if (material.map) {
+              material.map.needsUpdate = true
+            }
+          }
+        }
+      })
+    }
+  }, [materials])
+
+  // Model is actually huge, needs to be scaled down to 0.005
+  const EARTH_SCALE = 0.00395
+
+  return (
+    <group ref={earthRef}>
+      <primitive 
+        object={clonedScene} 
+        scale={[EARTH_SCALE, EARTH_SCALE, EARTH_SCALE]}
+        position={[0, 0, 0]}
+      />
+    </group>
+  )
+}
+
+// Fallback sphere component in case model fails to load
+function FallbackEarth() {
+  return (
+    <mesh position={[0, 0, 0]}>
+      <sphereGeometry args={[2, 64, 32]} />
+      <meshStandardMaterial
+        color="#1e3a8a"
+        roughness={0.7}
+        metalness={0.1}
+      />
+    </mesh>
+  )
+}
+
+// Earth component with error handling
+function Earth() {
+  const [modelError, setModelError] = useState(false)
+
+  // Handle model loading errors
+  const handleError = useCallback((error: any) => {
+    console.warn('Failed to load Earth model, using fallback:', error)
+    setModelError(true)
+  }, [])
+
+  if (modelError) {
+    return <FallbackEarth />
+  }
+
+  return (
+    <ErrorBoundary fallback={<FallbackEarth />} onError={handleError}>
+      <EarthModel />
+    </ErrorBoundary>
+  )
+}
+
+// Simple error boundary for the 3D model
+function ErrorBoundary({ 
+  children, 
+  fallback, 
+  onError 
+}: { 
+  children: React.ReactNode
+  fallback: React.ReactNode
+  onError?: (error: any) => void
+}) {
+  const [hasError, setHasError] = useState(false)
+
+  useEffect(() => {
+    const handleError = (error: any) => {
+      setHasError(true)
+      onError?.(error)
+    }
+
+    window.addEventListener('error', handleError)
+    return () => window.removeEventListener('error', handleError)
+  }, [onError])
+
+  if (hasError) {
+    return <>{fallback}</>
+  }
+
+  return <>{children}</>
 }
 
 function Globe({ 
@@ -53,15 +166,7 @@ function Globe({
   return (
     <group ref={groupRef}>
       {/* The Earth globe - loaded from GLB model */}
-      {/* Temporarily use simple sphere while we debug GLTF issues */}
-      <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[2, 64, 32]} />
-        <meshStandardMaterial
-          color="#1e3a8a"
-          roughness={0.7}
-          metalness={0.1}
-        />
-      </mesh>
+      <Earth />
       
       {/* Data visualization layer - now a child of the rotating group */}
       <DataPointManager
@@ -75,6 +180,7 @@ function Globe({
       
       {/* Orbital filaments that encircle the globe, initiated by cursor movement */}
       <OrbitalFilaments
+        key={`filaments-${visualizationMode}-${transitionProgress.toFixed(2)}`}
         dataPoints={dataPoints || []}
         intensity={1.5}
         visualizationMode={visualizationMode}
@@ -82,6 +188,7 @@ function Globe({
       
       {/* Ambient particles floating around the globe */}
       <AmbientParticles
+        key={`particles-${visualizationMode}-${transitionProgress.toFixed(2)}`}
         dataPoints={dataPoints || []}
         intensity={1.0}
       />
@@ -185,20 +292,40 @@ function Scene({
         onZoomChange={handleZoomChange}
         onVisualizationModeChange={handleVisualizationModeChange}
       >
-        {/* Ambient light for overall illumination */}
-        <ambientLight intensity={0.2} />
+        {/* Maximum intensity lighting setup for very dark Earth model */}
+        <ambientLight intensity={2.2} />
         
-        {/* Directional light to simulate sunlight */}
+        {/* Hemisphere light for natural outdoor lighting */}
+        <hemisphereLight
+          args={["#87CEEB", "#362d1a", 1.5]}
+        />
+        
+        {/* Very bright primary directional light */}
         <directionalLight
-          position={[5, 5, 5]}
-          intensity={0.8}
+          position={[10, 10, 5]}
+          intensity={0}
+          color="#ffffff"
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
         />
         
-        {/* Point light for additional illumination */}
-        <pointLight position={[-5, -5, -5]} intensity={0.3} />
+        {/* Bright secondary directional light for fill lighting */}
+        <directionalLight
+          position={[-20, -15, -20]}
+          intensity={0}
+          color="#e0f2fe"
+        />
+        
+        {/* Multiple strong point lights for maximum illumination */}
+        <pointLight position={[0, 0, 10]} intensity={0} color="#ffffff" />
+        <pointLight position={[10, 0, 0]} intensity={0} color="#ffffff" />
+        <pointLight position={[-10, 0, 0]} intensity={0} color="#ffffff" />
+        <pointLight position={[0, 10, 0]} intensity={0} color="#ffffff" />
+        <pointLight position={[0, -10, 0]} intensity={0} color="#ffffff" />
+        
+        {/* Rim lighting from behind */}
+        <pointLight position={[0, 0, -10]} intensity={5.2} color="#3b82f6" />
         
         {/* Background star field */}
         <StarField count={2500} radius={80} />
@@ -255,7 +382,7 @@ export const GlobeRenderer = forwardRef<GlobeRendererRef, GlobeRendererProps>(({
         camera={{
           position: [0, 0, 9], // Start further out to show heat map first
           fov: 45,
-          near: 0.1,
+          near: 0.01,  // Reduced for close-up viewing of small Earth
           far: 1000
         }}
         shadows
@@ -278,3 +405,6 @@ export const GlobeRenderer = forwardRef<GlobeRendererRef, GlobeRendererProps>(({
 })
 
 GlobeRenderer.displayName = 'GlobeRenderer'
+
+// Preload the Earth model for better performance
+useGLTF.preload('/models/Earth_1_12756.glb')
