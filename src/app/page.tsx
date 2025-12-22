@@ -257,8 +257,8 @@ export default function Home() {
       
       {/* Top Navigation Bar */}
       <div className="absolute top-6 left-6 right-6 z-10 flex items-center justify-between">
-        {/* Left - Filters Button - Smaller container */}
-        <div className="flex-shrink-0 w-24 flex justify-start">
+        {/* Left - Filters Button - Smaller container, centered with search bar */}
+        <div className="flex-shrink-0 w-24 flex justify-start" style={{ marginTop: '8px' }}>
           <AnimatedControls 
             onFiltersChange={handleFiltersChange}
             showOnlyFilters={true}
@@ -287,8 +287,8 @@ export default function Home() {
           )}
         </div>
         
-        {/* Right - Controls Button - Smaller container */}
-        <div className="flex-shrink-0 w-24 flex justify-end">
+        {/* Right - Controls Button - Smaller container, centered with search bar */}
+        <div className="flex-shrink-0 w-24 flex justify-end" style={{ marginTop: '8px' }}>
           <AnimatedControls 
             onFiltersChange={handleFiltersChange}
             showOnlyControls={true}
