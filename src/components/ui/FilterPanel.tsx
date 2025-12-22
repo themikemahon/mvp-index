@@ -168,7 +168,7 @@ export default function FilterPanel({
   return (
     <div className={`${className}`}>
       {/* Expanded Filter Panel */}
-      <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] w-80">
+      <div className="bg-black/50 backdrop-blur-sm border border-white/20 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] w-80">
         {/* Header */}
         <div className="p-6 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">

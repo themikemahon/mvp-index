@@ -274,7 +274,7 @@ export default function SearchBar({
               }
             }}
             placeholder={placeholder}
-            className="w-full h-16 px-7 pr-16 text-[17px] text-white/95 bg-black/50 backdrop-blur-sm border border-white/10 rounded-full focus:outline-none focus:border-white/30 placeholder-white/40 transition-all duration-200 shadow-[0_0_15px_rgba(0,0,0,0.3)] hover:border-white/20"
+            className="w-full h-16 px-7 pr-16 text-[17px] text-white/95 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full focus:outline-none focus:border-white/30 placeholder-white/40 transition-all duration-200 shadow-[0_0_15px_rgba(0,0,0,0.3)] hover:border-white/30"
             disabled={isLoading}
           />
 
@@ -322,7 +322,7 @@ export default function SearchBar({
             
             <div 
               ref={suggestionsRef}
-              className="absolute top-full left-0 right-0 mt-3 bg-black/40 backdrop-blur-sm border border-white/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-50 overflow-hidden"
+              className="absolute top-full left-0 right-0 mt-3 bg-black/40 backdrop-blur-sm border border-white/20 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-50 overflow-hidden"
             >
             {!query && (
               <>

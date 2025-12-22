@@ -36,7 +36,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
       onMouseLeave={() => setIsHovered(false)}
       className={`
         relative group overflow-hidden
-        bg-black/50 backdrop-blur-sm border border-white/10 
+        bg-black/50 backdrop-blur-sm border border-white/20 
         rounded-full flex items-center
         text-white/70 hover:text-white hover:border-white/30 
         shadow-[0_0_15px_rgba(0,0,0,0.3)]
@@ -138,7 +138,7 @@ export default function AnimatedControls({
         
         {/* Controls Panel */}
         {showControls && (
-          <div className="absolute top-16 right-0 bg-black/50 backdrop-blur-sm rounded-3xl p-6 border border-white/10 w-80 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+          <div className="absolute top-16 right-0 bg-black/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 w-80 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
             <h3 className="text-white font-medium mb-4 text-lg">Navigation Controls</h3>
             <div className="space-y-3 text-base text-gray-300">
               <div>• <strong>Zoom:</strong> Mouse wheel or pinch</div>
@@ -202,7 +202,7 @@ export default function AnimatedControls({
           
           {/* Controls Panel */}
           {showControls && (
-            <div className="absolute top-16 right-0 bg-black/50 backdrop-blur-sm rounded-3xl p-6 border border-white/10 w-80 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+            <div className="absolute top-16 right-0 bg-black/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 w-80 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
               <h3 className="text-white font-medium mb-4 text-lg">Navigation Controls</h3>
               <div className="space-y-3 text-base text-gray-300">
                 <div>• <strong>Zoom:</strong> Mouse wheel or pinch</div>
