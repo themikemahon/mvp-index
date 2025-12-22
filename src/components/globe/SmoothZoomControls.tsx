@@ -128,9 +128,9 @@ export function SmoothZoomControls({
       state.current.rotateEnd.set(x, y)
       state.current.rotateDelta.subVectors(state.current.rotateEnd, state.current.rotateStart).multiplyScalar(rotateSpeed)
       
-      // Apply rotation with smooth damping
+      // Apply rotation with smooth damping - inverted Y-axis for intuitive control
       state.current.sphericalDelta.theta -= 2 * Math.PI * state.current.rotateDelta.x
-      state.current.sphericalDelta.phi -= 2 * Math.PI * state.current.rotateDelta.y
+      state.current.sphericalDelta.phi += 2 * Math.PI * state.current.rotateDelta.y  // Inverted Y-axis
       
       state.current.rotateStart.copy(state.current.rotateEnd)
     } else if (state.current.mouseButton === 2 && enablePan) {
