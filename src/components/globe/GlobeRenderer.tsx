@@ -69,6 +69,11 @@ function EarthModel() {
         scale={[EARTH_SCALE, EARTH_SCALE, EARTH_SCALE]}
         position={[0, 0, 0]}
       />
+      {/* Invisible collision sphere for hover detection - matches visual Earth size */}
+      <mesh position={[0, 0, 0]} visible={false}>
+        <sphereGeometry args={[2.0, 32, 16]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
     </group>
   )
 }
@@ -77,7 +82,7 @@ function EarthModel() {
 function FallbackEarth() {
   return (
     <mesh position={[0, 0, 0]}>
-      <sphereGeometry args={[2, 64, 32]} />
+      <sphereGeometry args={[2.0, 64, 32]} />
       <meshStandardMaterial
         color="#1e3a8a"
         roughness={0.7}
@@ -143,7 +148,8 @@ function Globe({
   transitionProgress,
   zoomLevel,
   onDataPointClick,
-  onDataPointHover
+  onDataPointHover,
+  isDataPointHovered
 }: { 
   dataPoints?: ThreatDataPoint[]
   visualizationMode: 'heatmap' | 'pixels'
@@ -151,8 +157,11 @@ function Globe({
   zoomLevel: number
   onDataPointClick?: (dataPoint: ThreatDataPoint) => void
   onDataPointHover?: (dataPoint: ThreatDataPoint | null) => void
+  isDataPointHovered?: boolean
 }) {
   const groupRef = useRef<THREE.Group>(null)
+  const rotationSpeedRef = useRef(0.1) // Current rotation speed
+  const targetRotationSpeedRef = useRef(0.1) // Target rotation speed
   
   // Set initial rotation offset (145 degrees = ~2.535 radians)
   useEffect(() => {
@@ -161,10 +170,23 @@ function Globe({
     }
   }, [])
 
-  // Rotate the entire globe group (including data points) slowly
+  // Smooth rotation with easing when hovering over data points in detail (pixels) mode
   useFrame((_, delta) => {
     if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.1
+      // Determine target rotation speed
+      const shouldSlowDown = visualizationMode === 'pixels' && isDataPointHovered
+      targetRotationSpeedRef.current = shouldSlowDown ? 0 : 0.1 // Complete stop instead of slow movement
+      
+      // Smooth interpolation to target speed
+      const lerpFactor = delta * 6 // Increased from 4 for faster easing
+      rotationSpeedRef.current = THREE.MathUtils.lerp(
+        rotationSpeedRef.current, 
+        targetRotationSpeedRef.current, 
+        lerpFactor
+      )
+      
+      // Apply the smoothed rotation speed
+      groupRef.current.rotation.y += delta * rotationSpeedRef.current
     }
   })
 
@@ -215,6 +237,7 @@ function Scene({
   const [currentZoomLevel, setCurrentZoomLevel] = useState<ZoomLevel | null>(null)
   const [visualizationMode, setVisualizationMode] = useState<'heatmap' | 'pixels'>('heatmap')
   const [transitionProgress, setTransitionProgress] = useState(0)
+  const [isDataPointHovered, setIsDataPointHovered] = useState(false)
   const { camera } = useThree()
 
   const handleZoomChange = useCallback((zoomLevel: ZoomLevel) => {
@@ -227,6 +250,12 @@ function Scene({
     setVisualizationMode(mode)
     setTransitionProgress(progress)
   }, [])
+
+  // Enhanced data point hover handler to track hover state
+  const handleDataPointHover = useCallback((dataPoint: ThreatDataPoint | null) => {
+    setIsDataPointHovered(dataPoint !== null)
+    onDataPointHover?.(dataPoint)
+  }, [onDataPointHover])
 
   // Convert ZoomLevel to numeric value for DataPointManager
   const numericZoomLevel = currentZoomLevel?.distance ? (20 - currentZoomLevel.distance) : 5
@@ -340,7 +369,8 @@ function Scene({
           transitionProgress={transitionProgress}
           zoomLevel={numericZoomLevel}
           onDataPointClick={onDataPointClick}
-          onDataPointHover={onDataPointHover}
+          onDataPointHover={handleDataPointHover}
+          isDataPointHovered={isDataPointHovered}
         />
         
         {/* Smooth camera controls for fluid interaction */}

@@ -116,7 +116,7 @@ void main() {
     
     // Create orbital position (this will be transformed by the mesh rotation)
     float angle = animatedT * 6.28318; // 2 * PI
-    vec3 orbitalPos = vec3(cos(angle) * 2.2, 0.0, sin(angle) * 2.2);
+    vec3 orbitalPos = vec3(cos(angle) * 2.05, 0.0, sin(angle) * 2.05);
     
     // Add concentrated variation around the filament ribbon
     float ribbonOffset = (particlePhase - 3.14159) * 0.02; // Small offset perpendicular to ribbon
@@ -485,7 +485,7 @@ export function OrbitalFilaments({
         -mouseVelocity.x + (Math.random() - 0.5) * 0.5
       ).normalize()
       
-      const radius = 2.15 + Math.random() * 0.3
+      const radius = 2.05 + Math.random() * 0.15
       const inclination = (Math.random() - 0.5) * Math.PI * 0.4
       const speed = (mouseSpeed * 2 + 0.5) * (Math.random() * 0.5 + 0.5)
       

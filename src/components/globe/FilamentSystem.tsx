@@ -117,7 +117,7 @@ export function FilamentSystem({
     
     // Create several curved paths around the globe
     const pathCount = 8
-    const globeRadius = 2.1
+    const globeRadius = 2.05
     
     for (let i = 0; i < pathCount; i++) {
       const points: THREE.Vector3[] = []

@@ -276,6 +276,8 @@ export function DataPointManager({
   const groupRef = useRef<THREE.Group>(null)
   const animationTimeRef = useRef(0)
   const lastComputeTime = useRef(0)
+  const [hoveredPointId, setHoveredPointId] = useState<string | null>(null)
+  const scaleRefs = useRef<Map<string, { current: number; target: number }>>(new Map())
 
   // Memoize heat map texture with stable reference
   const heatMapTexture = useMemo(() => {
@@ -311,6 +313,12 @@ export function DataPointManager({
       heatMapOpacity: THREE.MathUtils.lerp(prev.heatMapOpacity, targetHeatMapOpacity, lerpFactor),
       pixelOpacity: THREE.MathUtils.lerp(prev.pixelOpacity, targetPixelOpacity, lerpFactor)
     }))
+    
+    // Update scale animations for hovered data points
+    scaleRefs.current.forEach((scaleData, pointId) => {
+      const scaleLerpFactor = delta * 8 // Fast scaling animation
+      scaleData.current = THREE.MathUtils.lerp(scaleData.current, scaleData.target, scaleLerpFactor)
+    })
     
     // Throttle expensive operations (material updates) to every 3rd frame
     if (currentTime - lastComputeTime.current > 1/20) { // 20fps for material updates
@@ -351,6 +359,7 @@ export function DataPointManager({
   }
 
   const handleDataPointHover = (clusteredPoint: ClusteredDataPoint | null) => {
+    setHoveredPointId(clusteredPoint ? clusteredPoint.id : null)
     if (onDataPointHover) {
       onDataPointHover(clusteredPoint ? clusteredPoint.dataPoints[0] : null)
     }
@@ -378,26 +387,52 @@ export function DataPointManager({
           const size = clusteredPoint.dataPoints.length > 1 
             ? Math.min(0.05, 0.02 + (clusteredPoint.dataPoints.length * 0.005))
             : 0.02
+          
+          // Create a larger invisible sphere for hover detection
+          const hoverSize = size * 3.5 // 3.5x larger hover area (reduced from 5x)
+          
+          // Initialize scale data for this point if it doesn't exist
+          if (!scaleRefs.current.has(clusteredPoint.id)) {
+            scaleRefs.current.set(clusteredPoint.id, { current: 1.0, target: 1.0 })
+          }
+          
+          // Update target scale based on hover state
+          const scaleData = scaleRefs.current.get(clusteredPoint.id)!
+          scaleData.target = hoveredPointId === clusteredPoint.id ? 1.20 : 1.0
+          
+          const currentScale = scaleData.current
 
           return (
-            <mesh
-              key={clusteredPoint.id}
-              position={clusteredPoint.position}
-              onClick={() => handleDataPointClick(clusteredPoint)}
-              onPointerEnter={() => handleDataPointHover(clusteredPoint)}
-              onPointerLeave={() => handleDataPointHover(null)}
-            >
-              <sphereGeometry args={[size, 12, 8]} />
-              <meshStandardMaterial
-                color={clusteredPoint.color}
-                transparent
-                opacity={smoothOpacities.pixelOpacity}
-                emissive={clusteredPoint.emissiveColor}
-                emissiveIntensity={1.0} // Maximum emissive intensity for production-matching vibrancy
-                roughness={0.05} // Very smooth surface for maximum glow
-                metalness={0.3} // More metallic for better reflection
-              />
-            </mesh>
+            <group key={clusteredPoint.id}>
+              {/* Visible data point with smooth hover scaling */}
+              <mesh 
+                position={clusteredPoint.position}
+                scale={[currentScale, currentScale, currentScale]}
+              >
+                <sphereGeometry args={[size, 12, 8]} />
+                <meshStandardMaterial
+                  color={clusteredPoint.color}
+                  transparent
+                  opacity={smoothOpacities.pixelOpacity}
+                  emissive={clusteredPoint.emissiveColor}
+                  emissiveIntensity={1.0} // Maximum emissive intensity for production-matching vibrancy
+                  roughness={0.05} // Very smooth surface for maximum glow
+                  metalness={0.3} // More metallic for better reflection
+                />
+              </mesh>
+              
+              {/* Invisible larger sphere for hover detection */}
+              <mesh
+                position={clusteredPoint.position}
+                onClick={() => handleDataPointClick(clusteredPoint)}
+                onPointerEnter={() => handleDataPointHover(clusteredPoint)}
+                onPointerLeave={() => handleDataPointHover(null)}
+                visible={false} // Invisible but still detects mouse events
+              >
+                <sphereGeometry args={[hoverSize, 8, 6]} />
+                <meshBasicMaterial transparent opacity={0} />
+              </mesh>
+            </group>
           )
         })
       }
