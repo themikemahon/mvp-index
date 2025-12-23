@@ -2,7 +2,7 @@
 'use client'
 
 import { useRef, useMemo } from 'react'
-import { extend, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { 
   EffectComposer, 
   Bloom, 
@@ -12,9 +12,6 @@ import {
 } from '@react-three/postprocessing'
 import { BlendFunction, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
-
-// Extend Three.js with post-processing components
-extend({ EffectComposer, Bloom, ChromaticAberration, ToneMapping, SMAA })
 
 export interface PostProcessingPipelineProps {
   children: React.ReactNode

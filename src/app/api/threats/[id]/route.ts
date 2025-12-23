@@ -6,10 +6,11 @@ import { ValidationError } from '@/lib/validation';
 // GET /api/threats/[id] - Get specific threat by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const threat = await threatRepository.getThreatById(params.id);
+    const { id } = await params;
+    const threat = await threatRepository.getThreatById(id);
 
     if (!threat) {
       return NextResponse.json(
@@ -35,13 +36,14 @@ export async function GET(
 // PUT /api/threats/[id] - Update specific threat
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const updateData: UpdateThreatInput = body;
 
-    const updatedThreat = await threatRepository.updateThreat(params.id, updateData);
+    const updatedThreat = await threatRepository.updateThreat(id, updateData);
 
     if (!updatedThreat) {
       return NextResponse.json(
@@ -83,17 +85,18 @@ export async function PUT(
 // DELETE /api/threats/[id] - Delete specific threat (soft delete)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const hard = searchParams.get('hard') === 'true';
 
     let success: boolean;
     if (hard) {
-      success = await threatRepository.hardDeleteThreat(params.id);
+      success = await threatRepository.hardDeleteThreat(id);
     } else {
-      success = await threatRepository.deleteThreat(params.id);
+      success = await threatRepository.deleteThreat(id);
     }
 
     if (!success) {

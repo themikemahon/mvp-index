@@ -68,12 +68,14 @@ export function StarField({ count = 2000, radius = 100 }: StarFieldProps) {
           count={count}
           array={positions}
           itemSize={3}
+          args={[positions, 3]}
         />
         <bufferAttribute
           attach="attributes-color"
           count={count}
           array={colors}
           itemSize={3}
+          args={[colors, 3]}
         />
       </bufferGeometry>
       <pointsMaterial
