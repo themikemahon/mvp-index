@@ -154,7 +154,12 @@ function Globe({
 }) {
   const groupRef = useRef<THREE.Group>(null)
   
-
+  // Set initial rotation offset (145 degrees = ~2.535 radians)
+  useEffect(() => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y = 2.535 // 145 degrees initial rotation
+    }
+  }, [])
 
   // Rotate the entire globe group (including data points) slowly
   useFrame((_, delta) => {
@@ -180,7 +185,6 @@ function Globe({
       
       {/* Orbital filaments that encircle the globe, initiated by cursor movement */}
       <OrbitalFilaments
-        key={`filaments-${visualizationMode}-${transitionProgress.toFixed(2)}`}
         dataPoints={dataPoints || []}
         intensity={1.5}
         visualizationMode={visualizationMode}
@@ -188,7 +192,6 @@ function Globe({
       
       {/* Ambient particles floating around the globe */}
       <AmbientParticles
-        key={`particles-${visualizationMode}-${transitionProgress.toFixed(2)}`}
         dataPoints={dataPoints || []}
         intensity={1.0}
       />
@@ -380,7 +383,7 @@ export const GlobeRenderer = forwardRef<GlobeRendererRef, GlobeRendererProps>(({
     <div className={`w-full h-full ${className}`}>
       <Canvas
         camera={{
-          position: [0, 0, 9], // Start further out to show heat map first
+          position: [0, 0, 8], // Reduced from 10 to 8 for closer initial view
           fov: 45,
           near: 0.01,  // Reduced for close-up viewing of small Earth
           far: 1000

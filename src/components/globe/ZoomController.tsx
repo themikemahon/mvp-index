@@ -77,6 +77,7 @@ export function ZoomController({
   const [previousMode, setPreviousMode] = useState<'heatmap' | 'pixels'>('heatmap')
   const [transitionProgress, setTransitionProgress] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
   
   // Animation state for smooth transitions
   const animationRef = useRef<{
@@ -109,37 +110,52 @@ export function ZoomController({
   }, [])
 
   // Calculate transition progress between visualization modes
-  // Heat map is primary - only show dots when zoomed in close
+  // Clear separation: heatmap for far distances, pixels for close distances
   const calculateTransitionProgress = useCallback((distance: number): number => {
-    // Transition boundaries - heat map dominates until very close
-    const heatmapThreshold = 9   // Distance where we start transitioning from heatmap
-    const pixelThreshold = 6     // Distance where we complete transition to pixels
+    const transitionThreshold = 8.0  // Single threshold for clean state separation
 
-    if (distance >= heatmapThreshold) {
-      return 0 // Full heatmap mode - this is the default view
-    } else if (distance <= pixelThreshold) {
-      return 1 // Full pixel mode - only when very close
+    if (distance >= transitionThreshold) {
+      return 0 // Full heatmap mode
     } else {
-      // Smooth transition between thresholds with more granular steps
-      const progress = (heatmapThreshold - distance) / (heatmapThreshold - pixelThreshold)
-      // Use smoother easing for more fluid transition
-      return progress * progress * progress * (progress * (progress * 6 - 15) + 10) // Smootherstep function
+      return 1 // Full pixel mode
     }
   }, [])
+
+  // Initialize camera position and state on first render
+  useEffect(() => {
+    if (!isInitialized) {
+      // Ensure camera starts at a consistent position - closer for better heat map view
+      camera.position.set(0, 0, 8)
+      camera.lookAt(0, 0, 0)
+      
+      // Initialize with correct zoom level
+      const initialDistance = camera.position.length()
+      const initialZoomLevel = getZoomLevelForDistance(initialDistance)
+      const initialProgress = calculateTransitionProgress(initialDistance)
+      
+      setCurrentZoomLevel(initialZoomLevel)
+      setTransitionProgress(initialProgress)
+      
+      // Notify parent components of initial state
+      onZoomChange?.(initialZoomLevel, initialProgress)
+      onVisualizationModeChange?.('heatmap', initialProgress)
+      
+      setIsInitialized(true)
+    }
+  }, [camera, isInitialized, onZoomChange, onVisualizationModeChange, getZoomLevelForDistance, calculateTransitionProgress])
 
   // Smooth transition animation using easing
   const easeInOutCubic = useCallback((t: number): number => {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
   }, [])
 
-  // Update zoom state and handle transitions
+  // Update zoom state and handle transitions with separated visual/computational updates
   useFrame((state, delta) => {
     const currentDistance = getCameraDistance()
-    const newZoomLevel = getZoomLevelForDistance(currentDistance)
-    const rawProgress = calculateTransitionProgress(currentDistance)
-
+    
+    // Visual updates (opacity, transitions) run at 60fps for smoothness
     // Handle smooth animation if we're transitioning
-    let finalProgress = rawProgress
+    let finalProgress = calculateTransitionProgress(currentDistance)
     if (animationRef.current) {
       const elapsed = state.clock.elapsedTime - animationRef.current.startTime
       const animationProgress = Math.min(elapsed / animationRef.current.duration, 1)
@@ -158,34 +174,40 @@ export function ZoomController({
       }
     }
 
-    // Check if visualization mode should change
-    const newMode = finalProgress < 0.5 ? 'heatmap' : 'pixels'
+    // Always update transition progress for smooth visuals
+    if (Math.abs(finalProgress - transitionProgress) > 0.005) { // Smaller threshold for smoother visuals
+      setTransitionProgress(finalProgress)
+    }
+
+    // Throttle expensive computations to every 2nd frame
+    if (Math.floor(state.clock.elapsedTime * 60) % 2 !== 0) return
     
-    // Start transition animation if mode is changing
+    const newZoomLevel = getZoomLevelForDistance(currentDistance)
+
+    // Check if visualization mode should change - clear state separation
+    const newMode = currentDistance >= 8.0 ? 'heatmap' : 'pixels'
+    
+    // Start transition animation if mode is changing and not already transitioning
     if (newMode !== previousMode && !isTransitioning) {
       setIsTransitioning(true)
       setPreviousMode(newMode)
       
       animationRef.current = {
         startTime: state.clock.elapsedTime,
-        duration: 1.2, // Longer transition for smoother feel
+        duration: 0.6, // Smooth transition duration
         fromProgress: transitionProgress,
-        toProgress: rawProgress
+        toProgress: calculateTransitionProgress(currentDistance)
       }
     }
 
-    // Update state
+    // Update state only if there's a meaningful change
     if (newZoomLevel !== currentZoomLevel) {
       setCurrentZoomLevel(newZoomLevel)
       onZoomChange?.(newZoomLevel, finalProgress)
     }
 
-    if (Math.abs(finalProgress - transitionProgress) > 0.001) {
-      setTransitionProgress(finalProgress)
-    }
-
-    // Notify about visualization mode changes
-    if (newMode !== previousMode || Math.abs(finalProgress - transitionProgress) > 0.001) {
+    // Notify about visualization mode changes with debouncing
+    if (newMode !== previousMode) {
       onVisualizationModeChange?.(newMode, finalProgress)
     }
   })
@@ -205,15 +227,14 @@ export function useZoomController() {
 
   useFrame(() => {
     const distance = camera.position.length()
-    // Updated thresholds to match the new smoother behavior
-    const progress = distance >= 9 ? 0 : distance <= 6 ? 1 : (9 - distance) / 3
-    const mode = progress < 0.5 ? 'heatmap' : 'pixels' // Heat map dominates longer
+    const progress = distance >= 8.0 ? 0 : 1 // Clear binary state
+    const mode = distance >= 8.0 ? 'heatmap' : 'pixels' // Clear binary state
     
     setZoomState(prev => ({
       distance,
       mode,
       progress,
-      isTransitioning: Math.abs(progress - 0.5) < 0.2 // Wider transition zone
+      isTransitioning: Math.abs(distance - 8.0) < 0.5 // Narrow transition zone
     }))
   })
 

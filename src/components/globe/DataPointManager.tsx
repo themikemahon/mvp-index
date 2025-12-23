@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { ThreatDataPoint, ThreatType } from '@/types/threat'
@@ -36,47 +36,48 @@ function latLngToVector3(lat: number, lng: number, radius: number = 2.05): THREE
   return new THREE.Vector3(x, y, z)
 }
 
-// Get color based on threat type and severity
+// Get color based on threat type and severity - production-matching vibrant colors
 function getThreatColor(threatType: ThreatType, severity: number): { color: string; emissive: string } {
   switch (threatType) {
-    case 'protection':
-      // Blue/purple for protection data
-      return severity >= 7 
-        ? { color: '#4c1d95', emissive: '#6d28d9' } // Deep purple
-        : { color: '#1e40af', emissive: '#3b82f6' } // Blue
-    
     case 'vulnerability':
-      // Red for vulnerabilities
-      return severity >= 7
-        ? { color: '#dc2626', emissive: '#ef4444' } // Bright red
-        : { color: '#b91c1c', emissive: '#dc2626' } // Dark red
+      // Bright red matching production screenshot
+      return severity >= 7 
+        ? { color: '#ff0000', emissive: '#ff4444' } // Pure red with bright glow
+        : { color: '#dd0000', emissive: '#ff2222' } // Strong red with glow
     
     case 'scam':
-      // Orange for scams
+      // Bright orange matching production screenshot
       return severity >= 7
-        ? { color: '#ea580c', emissive: '#f97316' } // Bright orange
-        : { color: '#c2410c', emissive: '#ea580c' } // Dark orange
+        ? { color: '#ff8800', emissive: '#ffaa44' } // Vivid orange with warm glow
+        : { color: '#ee7700', emissive: '#ff9933' } // Strong orange with glow
     
     case 'financial_risk':
-      // Yellow for financial risks
+      // Bright yellow matching production screenshot
       return severity >= 7
-        ? { color: '#eab308', emissive: '#facc15' } // Bright yellow
-        : { color: '#ca8a04', emissive: '#eab308' } // Dark yellow
+        ? { color: '#ffff00', emissive: '#ffff66' } // Pure yellow with bright glow
+        : { color: '#eeee00', emissive: '#ffff44' } // Strong yellow with glow
+    
+    case 'protection':
+      // Bright blue matching production screenshot
+      return severity >= 7 
+        ? { color: '#0088ff', emissive: '#44aaff' } // Bright blue with cyan glow
+        : { color: '#0066dd', emissive: '#3399ff' } // Strong blue with light glow
     
     default:
-      return { color: '#6b7280', emissive: '#9ca3af' } // Gray fallback
+      return { color: '#9ca3af', emissive: '#d1d5db' } // Gray fallback
   }
 }
 
 // Cluster nearby data points for performance optimization
+// Now with spatial indexing for better performance
 function clusterDataPoints(
   dataPoints: ThreatDataPoint[], 
   zoomLevel: number,
   clusterDistance: number = 0.3
 ): ClusteredDataPoint[] {
-  // At high zoom levels, don't cluster
+  // At high zoom levels, don't cluster but limit the number of points for performance
   if (zoomLevel > 8) {
-    return dataPoints.map(point => {
+    return dataPoints.slice(0, 200).map(point => { // Limit to 200 points max
       const position = latLngToVector3(point.coordinates.latitude, point.coordinates.longitude)
       const colors = getThreatColor(point.threatType, point.severity)
       
@@ -92,72 +93,103 @@ function clusterDataPoints(
     })
   }
 
-  const clusters: ClusteredDataPoint[] = []
-  const processed = new Set<string>()
-
+  // Use spatial grid for faster clustering
+  const gridSize = 0.5 // Adjust based on cluster distance
+  const grid = new Map<string, ThreatDataPoint[]>()
+  
+  // Group points into grid cells
   dataPoints.forEach(point => {
-    if (processed.has(point.id)) return
-
     const position = latLngToVector3(point.coordinates.latitude, point.coordinates.longitude)
-    const cluster: ClusteredDataPoint = {
-      id: `cluster-${point.id}`,
-      position,
-      dataPoints: [point],
-      averageSeverity: point.severity,
-      dominantThreatType: point.threatType,
-      color: '',
-      emissiveColor: ''
+    const gridX = Math.floor(position.x / gridSize)
+    const gridY = Math.floor(position.y / gridSize)
+    const gridZ = Math.floor(position.z / gridSize)
+    const gridKey = `${gridX},${gridY},${gridZ}`
+    
+    if (!grid.has(gridKey)) {
+      grid.set(gridKey, [])
     }
-
-    processed.add(point.id)
-
-    // Find nearby points to cluster
-    dataPoints.forEach(otherPoint => {
-      if (processed.has(otherPoint.id)) return
-
-      const otherPosition = latLngToVector3(
-        otherPoint.coordinates.latitude, 
-        otherPoint.coordinates.longitude
-      )
-
-      if (position.distanceTo(otherPosition) < clusterDistance) {
-        cluster.dataPoints.push(otherPoint)
-        processed.add(otherPoint.id)
-      }
-    })
-
-    // Calculate cluster properties
-    const totalSeverity = cluster.dataPoints.reduce((sum, p) => sum + p.severity, 0)
-    cluster.averageSeverity = totalSeverity / cluster.dataPoints.length
-
-    // Find dominant threat type
-    const typeCounts = cluster.dataPoints.reduce((counts, p) => {
-      counts[p.threatType] = (counts[p.threatType] || 0) + 1
-      return counts
-    }, {} as Record<ThreatType, number>)
-
-    cluster.dominantThreatType = Object.entries(typeCounts).reduce((a, b) => 
-      typeCounts[a[0] as ThreatType] > typeCounts[b[0] as ThreatType] ? a : b
-    )[0] as ThreatType
-
-    // Set colors based on dominant type and average severity
-    const colors = getThreatColor(cluster.dominantThreatType, cluster.averageSeverity)
-    cluster.color = colors.color
-    cluster.emissiveColor = colors.emissive
-
-    clusters.push(cluster)
+    grid.get(gridKey)!.push(point)
   })
 
-  return clusters
+  const clusters: ClusteredDataPoint[] = []
+  
+  // Process each grid cell
+  grid.forEach(cellPoints => {
+    if (cellPoints.length === 0) return
+    
+    // For cells with few points, create individual clusters
+    if (cellPoints.length <= 3) {
+      cellPoints.forEach(point => {
+        const position = latLngToVector3(point.coordinates.latitude, point.coordinates.longitude)
+        const colors = getThreatColor(point.threatType, point.severity)
+        
+        clusters.push({
+          id: point.id,
+          position,
+          dataPoints: [point],
+          averageSeverity: point.severity,
+          dominantThreatType: point.threatType,
+          color: colors.color,
+          emissiveColor: colors.emissive
+        })
+      })
+    } else {
+      // For cells with many points, create a single cluster
+      const centerPoint = cellPoints[0]
+      const position = latLngToVector3(centerPoint.coordinates.latitude, centerPoint.coordinates.longitude)
+      
+      // Calculate cluster properties
+      const totalSeverity = cellPoints.reduce((sum, p) => sum + p.severity, 0)
+      const averageSeverity = totalSeverity / cellPoints.length
+
+      // Find dominant threat type
+      const typeCounts = cellPoints.reduce((counts, p) => {
+        counts[p.threatType] = (counts[p.threatType] || 0) + 1
+        return counts
+      }, {} as Record<ThreatType, number>)
+
+      const dominantThreatType = Object.entries(typeCounts).reduce((a, b) => 
+        typeCounts[a[0] as ThreatType] > typeCounts[b[0] as ThreatType] ? a : b
+      )[0] as ThreatType
+
+      const colors = getThreatColor(dominantThreatType, averageSeverity)
+      
+      clusters.push({
+        id: `cluster-${centerPoint.id}`,
+        position,
+        dataPoints: cellPoints,
+        averageSeverity,
+        dominantThreatType,
+        color: colors.color,
+        emissiveColor: colors.emissive
+      })
+    }
+  })
+
+  return clusters.slice(0, 150) // Limit total clusters for performance
 }
 
 // Generate heat map texture based on data points
 // Enhanced for better visual appeal as the primary visualization
+// Now with caching for better performance
+const textureCache = new Map<string, THREE.Texture>()
+
 function generateHeatMapTexture(
   dataPoints: ThreatDataPoint[],
   width: number = 1024, // Higher resolution for better quality
   height: number = 512
 ): THREE.Texture {
+  // Create cache key based on data points
+  const cacheKey = dataPoints
+    .map(p => `${p.id}-${p.coordinates.latitude}-${p.coordinates.longitude}-${p.severity}-${p.threatType}`)
+    .sort()
+    .join('|')
+  
+  // Return cached texture if available
+  if (textureCache.has(cacheKey)) {
+    return textureCache.get(cacheKey)!
+  }
+  
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -181,9 +213,9 @@ function generateHeatMapTexture(
     const baseRadius = Math.max(12, point.severity * 4)
     const gradient = context.createRadialGradient(x, y, 0, x, y, baseRadius)
     
-    // Color based on threat type and severity with enhanced visibility
+    // Color based on threat type and severity with natural visibility
     const colors = getThreatColor(point.threatType, point.severity)
-    const alpha = Math.min(0.9, (point.severity / 10) + 0.2) // Minimum visibility
+    const alpha = Math.min(0.8, (point.severity / 10) + 0.3) // Moderate visibility levels
     
     // Convert hex to RGB for better alpha control
     const hexToRgb = (hex: string) => {
@@ -197,8 +229,11 @@ function generateHeatMapTexture(
     
     const rgb = hexToRgb(colors.emissive)
     
+    // Enhanced gradient for more vibrant heat map
     gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`)
-    gradient.addColorStop(0.5, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.6})`)
+    gradient.addColorStop(0.2, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.8})`) // Stronger core
+    gradient.addColorStop(0.5, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.6})`) // Extended visibility
+    gradient.addColorStop(0.8, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.3})`) // Wider glow
     gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`)
     
     context.fillStyle = gradient
@@ -214,6 +249,19 @@ function generateHeatMapTexture(
   texture.wrapT = THREE.RepeatWrapping
   texture.needsUpdate = true
   
+  // Cache the texture
+  textureCache.set(cacheKey, texture)
+  
+  // Clean up old cache entries if we have too many
+  if (textureCache.size > 10) {
+    const firstKey = textureCache.keys().next().value
+    if (firstKey) {
+      const oldTexture = textureCache.get(firstKey)
+      oldTexture?.dispose()
+      textureCache.delete(firstKey)
+    }
+  }
+  
   return texture
 }
 
@@ -226,42 +274,65 @@ export function DataPointManager({
   onDataPointHover
 }: DataPointManagerProps) {
   const groupRef = useRef<THREE.Group>(null)
+  const animationTimeRef = useRef(0)
+  const lastComputeTime = useRef(0)
 
-  // Generate heat map texture
+  // Memoize heat map texture with stable reference
   const heatMapTexture = useMemo(() => {
     if (dataPoints.length === 0) return null
     return generateHeatMapTexture(dataPoints)
   }, [dataPoints])
 
-  // Cluster data points based on zoom level
+  // Optimize clustering with debounced zoom level changes
   const clusteredPoints = useMemo(() => {
-    return clusterDataPoints(dataPoints, zoomLevel)
-  }, [dataPoints, zoomLevel])
+    // Round zoom level to reduce recalculations
+    const roundedZoom = Math.round(zoomLevel * 2) / 2
+    return clusterDataPoints(dataPoints, roundedZoom)
+  }, [dataPoints, Math.round(zoomLevel * 2) / 2])
 
-  // Calculate opacity values for smooth transitions
-  // Heat map is primary and stays visible longer
-  const heatMapOpacity = visualizationMode === 'heatmap' 
-    ? Math.max(0.1, 1 - transitionProgress * 1.5) // Keep some heat map even during transition
-    : Math.max(0, 0.3 - transitionProgress * 0.5) // Fade out more gradually
-  
-  // Dots only appear when significantly zoomed in
-  const pixelOpacity = transitionProgress > 0.5 
-    ? Math.min(1, (transitionProgress - 0.5) * 2) // Only start showing dots at 50% transition
-    : 0
+  // Calculate smooth opacity values at 60fps for visual smoothness
+  const [smoothOpacities, setSmoothOpacities] = useState({ 
+    heatMapOpacity: 1.0, // Start with heat map fully visible
+    pixelOpacity: 0.0    // Start with dots hidden
+  })
 
-  // Add subtle animation to data points
-  useFrame((state) => {
-    if (groupRef.current) {
-      // Subtle pulsing effect for data points
-      const time = state.clock.getElapsedTime()
-      groupRef.current.children.forEach((child, index) => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          const baseIntensity = 0.3
-          const pulseIntensity = 0.1
-          const phase = (index * 0.5) + (time * 2)
-          child.material.emissiveIntensity = baseIntensity + Math.sin(phase) * pulseIntensity
-        }
-      })
+  // Separate visual updates (60fps) from computational updates (throttled)
+  useFrame((state, delta) => {
+    animationTimeRef.current += delta
+    const currentTime = state.clock.getElapsedTime()
+    
+    // Clear state-based opacity calculations
+    const targetHeatMapOpacity = visualizationMode === 'heatmap' ? 1.0 : 0.0 // Binary: full or off
+    const targetPixelOpacity = visualizationMode === 'pixels' ? 1.0 : 0.0 // Binary: full or off
+
+    // Smooth interpolation for opacity changes at 60fps
+    const lerpFactor = Math.min(1, delta * 6) // Smooth but responsive
+    setSmoothOpacities(prev => ({
+      heatMapOpacity: THREE.MathUtils.lerp(prev.heatMapOpacity, targetHeatMapOpacity, lerpFactor),
+      pixelOpacity: THREE.MathUtils.lerp(prev.pixelOpacity, targetPixelOpacity, lerpFactor)
+    }))
+    
+    // Throttle expensive operations (material updates) to every 3rd frame
+    if (currentTime - lastComputeTime.current > 1/20) { // 20fps for material updates
+      lastComputeTime.current = currentTime
+      
+      if (groupRef.current && smoothOpacities.pixelOpacity > 0) {
+        const time = state.clock.getElapsedTime()
+        
+        // Batch update materials with production-matching color vibrancy
+        groupRef.current.children.forEach((child, index) => {
+          if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+            const baseIntensity = 1.0 // Maximum base intensity for production matching
+            const pulseIntensity = 0.2 // Subtle pulsing to avoid overwhelming effect
+            const phase = (index * 0.3) + (time * 1.5)
+            child.material.emissiveIntensity = baseIntensity + Math.sin(phase) * pulseIntensity
+            
+            // Production-matching material settings for maximum vibrancy
+            child.material.roughness = 0.05 // Very smooth surface for maximum glow
+            child.material.metalness = 0.3 // More metallic for better reflection
+          }
+        })
+      }
     }
   })
 
@@ -287,22 +358,22 @@ export function DataPointManager({
 
   return (
     <group ref={groupRef}>
-      {/* Heat Map Layer - Always visible, primary visualization */}
-      {heatMapTexture && heatMapOpacity > 0 && (
+      {/* Heat Map Layer - Only visible in heatmap mode */}
+      {visualizationMode === 'heatmap' && heatMapTexture && smoothOpacities.heatMapOpacity > 0.01 && (
         <mesh position={[0, 0, 0]}>
           <sphereGeometry args={[2.005, 64, 32]} />
           <meshBasicMaterial
             map={heatMapTexture}
             transparent
-            opacity={heatMapOpacity}
+            opacity={smoothOpacities.heatMapOpacity}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
           />
         </mesh>
       )}
 
-      {/* Individual Data Points Layer - Only visible when zoomed in close */}
-      {pixelOpacity > 0 && 
+      {/* Individual Data Points Layer - Only visible in pixels mode */}
+      {visualizationMode === 'pixels' && smoothOpacities.pixelOpacity > 0.01 && 
         clusteredPoints.map((clusteredPoint) => {
           const size = clusteredPoint.dataPoints.length > 1 
             ? Math.min(0.05, 0.02 + (clusteredPoint.dataPoints.length * 0.005))
@@ -320,63 +391,18 @@ export function DataPointManager({
               <meshStandardMaterial
                 color={clusteredPoint.color}
                 transparent
-                opacity={pixelOpacity}
+                opacity={smoothOpacities.pixelOpacity}
                 emissive={clusteredPoint.emissiveColor}
-                emissiveIntensity={0.3}
+                emissiveIntensity={1.0} // Maximum emissive intensity for production-matching vibrancy
+                roughness={0.05} // Very smooth surface for maximum glow
+                metalness={0.3} // More metallic for better reflection
               />
             </mesh>
           )
         })
       }
 
-      {/* Transition Effect - Particles that appear during mode switching */}
-      {transitionProgress > 0.1 && transitionProgress < 0.9 && (
-        <group>
-          {clusteredPoints
-            .slice(0, Math.floor(clusteredPoints.length * transitionProgress))
-            .map((clusteredPoint) => (
-              <group key={`transition-group-${clusteredPoint.id}`}>
-                {/* Main transition particle */}
-                <mesh position={clusteredPoint.position}>
-                  <sphereGeometry args={[0.015, 8, 6]} />
-                  <meshStandardMaterial
-                    color="#ffffff"
-                    transparent
-                    opacity={Math.sin(transitionProgress * Math.PI) * 0.5}
-                    emissive="#ffffff"
-                    emissiveIntensity={0.2}
-                  />
-                </mesh>
-                
-                {/* Additional small particles around each data point */}
-                {Array.from({ length: 3 }, (_, i) => {
-                  const angle = (i / 3) * Math.PI * 2
-                  const radius = 0.05
-                  const offset = new THREE.Vector3(
-                    Math.cos(angle) * radius,
-                    Math.sin(angle) * radius * 0.5,
-                    Math.sin(angle + Math.PI * 0.5) * radius
-                  )
-                  const particlePosition = clusteredPoint.position.clone().add(offset)
-                  
-                  return (
-                    <mesh key={`particle-${i}`} position={particlePosition}>
-                      <sphereGeometry args={[0.008, 6, 4]} />
-                      <meshStandardMaterial
-                        color={clusteredPoint.emissiveColor}
-                        transparent
-                        opacity={Math.sin(transitionProgress * Math.PI + i) * 0.3}
-                        emissive={clusteredPoint.emissiveColor}
-                        emissiveIntensity={0.4}
-                      />
-                    </mesh>
-                  )
-                })}
-              </group>
-            ))
-          }
-        </group>
-      )}
+      {/* No transition effects - clean binary states */}
     </group>
   )
 }

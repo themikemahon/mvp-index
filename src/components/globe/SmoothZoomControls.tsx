@@ -64,7 +64,18 @@ export function SmoothZoomControls({
     offset.copy(camera.position).sub(target)
     state.current.spherical.setFromVector3(offset)
     state.current.lastDistance = offset.length()
-  }, [camera, target])
+    
+    // Ensure consistent initial state
+    if (state.current.lastDistance < minDistance || state.current.lastDistance > maxDistance) {
+      // Reset to safe default if camera is in invalid position
+      const safeDistance = Math.max(minDistance, Math.min(maxDistance, 8)) // Changed from 10 to 8
+      camera.position.set(0, 0, safeDistance)
+      camera.lookAt(target)
+      state.current.spherical.setFromVector3(camera.position.clone().sub(target))
+      state.current.lastDistance = safeDistance
+      onZoomChange?.(safeDistance)
+    }
+  }, [camera, target, minDistance, maxDistance, onZoomChange])
 
   // Smooth zoom function with exponential scaling
   const handleZoom = useCallback((delta: number) => {
@@ -185,8 +196,9 @@ export function SmoothZoomControls({
     }
   }, [gl, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp])
 
-  // Update camera position with smooth interpolation
-  useFrame(() => {
+  // Update camera position with smooth interpolation - separate visual from computational updates
+  useFrame((frameState, delta) => {
+    // Camera movement should always be smooth at 60fps
     // Apply auto rotation
     if (autoRotate && !state.current.isMouseDown) {
       state.current.sphericalDelta.theta -= 2 * Math.PI / 60 / 60 * autoRotateSpeed
@@ -212,7 +224,7 @@ export function SmoothZoomControls({
       state.current.zoomChanged = false
     }
 
-    // Update camera position
+    // Update camera position every frame for smooth movement
     const offset = new THREE.Vector3()
     offset.setFromSpherical(state.current.spherical)
     
@@ -224,11 +236,13 @@ export function SmoothZoomControls({
     // Apply damping to pan offset
     state.current.panOffset.multiplyScalar(1 - dampingFactor)
 
-    // Notify about zoom changes
-    const currentDistance = offset.length()
-    if (Math.abs(currentDistance - state.current.lastDistance) > 0.01) {
-      state.current.lastDistance = currentDistance
-      onZoomChange?.(currentDistance)
+    // Throttle zoom change notifications to reduce computational overhead
+    if (Math.floor(frameState.clock.elapsedTime * 30) % 1 === 0) { // 30fps for notifications
+      const currentDistance = offset.length()
+      if (Math.abs(currentDistance - state.current.lastDistance) > 0.05) { // Increased threshold
+        state.current.lastDistance = currentDistance
+        onZoomChange?.(currentDistance)
+      }
     }
   })
 

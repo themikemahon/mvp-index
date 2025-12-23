@@ -226,15 +226,15 @@ export default function Home() {
     setFilteredDataPoints(filtered)
   }
 
-  // Handle zoom-based fade effects - complete fade out when zoomed in
+  // Handle zoom-based fade effects - more forgiving fade out
   const handleZoomChange = (distance: number) => {
-    // Complete fade out when zoomed in (distance < 8), fade in when zoomed out (distance > 8)
-    const fadeThreshold = 8
-    const fadeRange = 1.5 // Shorter range for more dramatic transition
+    // More forgiving fade out - only fade when very close
+    const fadeThreshold = 6 // Reduced from 8 to be less aggressive
+    const fadeRange = 2 // Longer range for smoother transition
     
     let opacity = 1
     if (distance <= fadeThreshold - fadeRange) {
-      // Completely zoomed in - fully invisible
+      // Very zoomed in - fully invisible
       opacity = 0
     } else if (distance < fadeThreshold) {
       // In transition zone - fade from 1 to 0

@@ -209,11 +209,13 @@ export function OrbitalFilaments({
   const [mouseVelocity, setMouseVelocity] = useState({ x: 0, y: 0 })
   const [isHovering, setIsHovering] = useState(false)
   const [hoverDuration, setHoverDuration] = useState(0)
+  const [lastModeChange, setLastModeChange] = useState(0) // Track when mode last changed
   
   const filamentsRef = useRef<OrbitalFilament[]>([])
   const nextFilamentId = useRef(0)
   const lastMousePosition = useRef({ x: 0, y: 0 })
   const globeRef = useRef<THREE.Object3D | null>(null)
+  const previousVisualizationMode = useRef(visualizationMode)
   
   // Find the globe object for raycasting
   useEffect(() => {
@@ -444,16 +446,36 @@ export function OrbitalFilaments({
     const time = state.clock.elapsedTime
     const cameraDistance = camera.position.distanceTo(new THREE.Vector3(0, 0, 0))
     
+    // Track visualization mode changes
+    if (previousVisualizationMode.current !== visualizationMode) {
+      setLastModeChange(time)
+      if (visualizationMode === 'heatmap') {
+        // Reset hover duration when returning to heatmap mode to allow immediate spawning
+        setHoverDuration(0.5) // Give a small boost to encourage spawning
+      }
+      previousVisualizationMode.current = visualizationMode
+    }
+    
     // Update hover duration
     if (isHovering) {
       setHoverDuration(prev => prev + deltaTime)
     } else {
-      setHoverDuration(prev => Math.max(0, prev - deltaTime * 1.5))
+      setHoverDuration(prev => Math.max(0, prev - deltaTime * 2.0)) // Faster decay when not hovering
     }
     
-    // Spawn new orbital filaments based on mouse movement and hover
+    // Spawn new orbital filaments based on mouse movement and hover - only in heatmap mode
     const mouseSpeed = Math.sqrt(mouseVelocity.x * mouseVelocity.x + mouseVelocity.y * mouseVelocity.y)
-    const shouldSpawnFilament = isHovering && mouseSpeed > 0.01 && Math.random() < (hoverDuration * 0.3 + mouseSpeed * 2)
+    
+    // More responsive spawning: spawn on hover even with minimal mouse movement in heatmap mode
+    const baseSpawnChance = visualizationMode === 'heatmap' && isHovering ? 0.03 : 0 // Increased base chance
+    const mouseSpeedBonus = mouseSpeed * 4.0 // Increased bonus for mouse movement
+    const hoverBonus = Math.min(hoverDuration * 0.8, 1.5) // Increased bonus for sustained hovering
+    
+    // Add a small bonus for recently returning to heatmap mode
+    const modeChangeBonus = (time - lastModeChange < 2.0) ? 0.02 : 0 // Increased bonus
+    
+    const totalSpawnChance = baseSpawnChance + mouseSpeedBonus + hoverBonus + modeChangeBonus
+    const shouldSpawnFilament = Math.random() < totalSpawnChance
     
     if (shouldSpawnFilament && filamentsRef.current.length < 3) {
       // Create orbital axis based on mouse movement direction
@@ -484,7 +506,7 @@ export function OrbitalFilaments({
           radius,
           inclination,
           age: 0,
-          maxAge: 2 + Math.random() * 1.5, // 2-3.5 seconds lifetime
+          maxAge: 1.5 + Math.random() * 1.5, // 1.5-3 seconds lifetime (shorter, more dynamic)
           mesh,
           geometry,
           material,
@@ -535,8 +557,8 @@ export function OrbitalFilaments({
           fadeValue = (filament.maxAge - filament.age) / fadeOutDuration
         }
         
-        // Apply visualization mode fade - hide filaments in pixel mode
-        const visualizationFade = visualizationMode === 'heatmap' ? 1.0 : 0.0
+        // Apply visualization mode fade - only visible in heatmap mode
+        const visualizationFade = visualizationMode === 'heatmap' ? 1.0 : 0.0 // Completely off in pixel mode
         const finalFadeValue = Math.max(0, fadeValue * visualizationFade)
         
         filament.material.uniforms.fadeIn.value = finalFadeValue
