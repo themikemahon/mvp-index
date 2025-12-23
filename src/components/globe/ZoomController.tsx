@@ -112,7 +112,7 @@ export function ZoomController({
   // Calculate transition progress between visualization modes
   // Clear separation: heatmap for far distances, pixels for close distances
   const calculateTransitionProgress = useCallback((distance: number): number => {
-    const transitionThreshold = 8.0  // Single threshold for clean state separation
+    const transitionThreshold = 5.5  // Single threshold for clean state separation - reduced for later detail mode
 
     if (distance >= transitionThreshold) {
       return 0 // Full heatmap mode
@@ -185,7 +185,7 @@ export function ZoomController({
     const newZoomLevel = getZoomLevelForDistance(currentDistance)
 
     // Check if visualization mode should change - clear state separation
-    const newMode = currentDistance >= 8.0 ? 'heatmap' : 'pixels'
+    const newMode = currentDistance >= 5.5 ? 'heatmap' : 'pixels'
     
     // Start transition animation if mode is changing and not already transitioning
     if (newMode !== previousMode && !isTransitioning) {
@@ -227,14 +227,14 @@ export function useZoomController() {
 
   useFrame(() => {
     const distance = camera.position.length()
-    const progress = distance >= 8.0 ? 0 : 1 // Clear binary state
-    const mode = distance >= 8.0 ? 'heatmap' : 'pixels' // Clear binary state
+    const progress = distance >= 5.5 ? 0 : 1 // Clear binary state
+    const mode = distance >= 5.5 ? 'heatmap' : 'pixels' // Clear binary state
     
     setZoomState(prev => ({
       distance,
       mode,
       progress,
-      isTransitioning: Math.abs(distance - 8.0) < 0.5 // Narrow transition zone
+      isTransitioning: Math.abs(distance - 5.5) < 0.5 // Narrow transition zone
     }))
   })
 
