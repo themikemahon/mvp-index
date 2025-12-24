@@ -12,13 +12,14 @@ import { validateCreateThreatInput, validateUpdateThreatInput, validateGeographi
 
 // Transform database row to domain object
 function transformThreatRow(row: ThreatDataRow): ThreatDataPoint {
-  // Parse PostGIS POINT format: "POINT(longitude latitude)"
-  const pointMatch = row.coordinates.match(/POINT\(([^)]+)\)/);
+  // Handle PostgreSQL POINT type - comes as {x: longitude, y: latitude}
   let coordinates: Coordinates = { latitude: 0, longitude: 0 };
   
-  if (pointMatch) {
-    const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
-    coordinates = { latitude, longitude };
+  if (row.coordinates && typeof row.coordinates === 'object') {
+    coordinates = {
+      latitude: (row.coordinates as any).y,
+      longitude: (row.coordinates as any).x
+    };
   }
 
   return {
@@ -109,7 +110,8 @@ export class ThreatRepository {
     let sql = `
       SELECT * FROM threat_data 
       WHERE is_active = true 
-      AND ST_Within(coordinates, ST_MakeEnvelope($1, $2, $3, $4, 4326))
+      AND coordinates[0] BETWEEN $1 AND $3
+      AND coordinates[1] BETWEEN $2 AND $4
     `;
     
     const params: any[] = [bounds.west, bounds.south, bounds.east, bounds.north];
