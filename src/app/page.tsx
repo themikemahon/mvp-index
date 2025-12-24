@@ -5,6 +5,10 @@ import SearchBar from '@/components/ui/SearchBar'
 import AnimatedControls from '@/components/ui/AnimatedControls'
 import { AppLoader } from '@/components/ui/AppLoader'
 import { useAppLoader } from '@/hooks/useAppLoader'
+import { useResponsive, useLayoutSettings, useDeviceCapabilities } from '@/hooks/useResponsive'
+import { useResponsiveIntegration } from '@/components/ResponsiveIntegrationManager'
+import { MobileNavigationSystem } from '@/components/ui/MobileNavigationSystem'
+import AccessibilityButton from '@/components/ui/AccessibilityButton'
 import { ThreatDataPoint, ThreatType, ThreatFilters } from '@/types/threat'
 import { useState, useEffect } from 'react'
 
@@ -24,6 +28,19 @@ export default function HomePage() {
     markStepComplete, 
     completeLoading 
   } = useAppLoader()
+
+  // Responsive layout management
+  const { isMobile, isTablet, isDesktop } = useResponsive()
+  const layoutSettings = useLayoutSettings()
+  const deviceCapabilities = useDeviceCapabilities()
+  
+  // Responsive integration state
+  const {
+    shouldUseMobileRenderer,
+    shouldUseFullScreenModals,
+    shouldShowHamburgerMenu,
+    touchTargetSize
+  } = useResponsiveIntegration()
 
   // Load threat data from Neon database
   useEffect(() => {
@@ -118,6 +135,138 @@ export default function HomePage() {
     setSearchBarOpacity(opacity)
   }
 
+  // Handle refresh for mobile pull-to-refresh
+  const handleRefresh = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/threats?bounds=-90,-180,90,180')
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load threats: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      if (data.success && data.data) {
+        setThreatData(data.data)
+        setFilteredDataPoints(data.data)
+      }
+    } catch (err) {
+      console.error('Failed to refresh threat data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Mobile layout with navigation system
+  if (isMobile || isTablet) {
+    return (
+      <>
+        <AppLoader 
+          isVisible={isAppLoading}
+          onLoadComplete={completeLoading}
+          loadingSteps={loadingSteps}
+        />
+        {error && !isAppLoading && (
+          <div className="flex items-center justify-center min-h-screen bg-black text-white">
+            <div className="text-center">
+              <p className="text-red-400 mb-4">❌ Error loading data: {error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+        
+        <MobileNavigationSystem
+          onRefresh={handleRefresh}
+          isLoading={loading}
+          loadingMessage="Loading threat data..."
+          className={`transition-opacity duration-1000 ${isAppLoading ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <div className="relative w-full h-full overflow-hidden bg-black">
+            {/* Full-screen Globe Background */}
+            <div className="absolute inset-0 w-full h-full">
+              <InteractiveGlobe 
+                className="w-full h-full" 
+                dataPoints={filteredDataPoints}
+                onZoomChange={handleZoomChange}
+                onReady={() => markStepComplete('shaders')}
+              />
+            </div>
+            
+            {/* Mobile-optimized UI overlay */}
+            <div className="absolute inset-0 pointer-events-none">
+              {/* Top bar with search and filters */}
+              <div className="absolute top-4 left-4 right-4 z-10 pointer-events-auto">
+                <div className="flex items-center justify-between gap-4">
+                  {/* Search Bar - full width on mobile */}
+                  <div className="flex-1">
+                    <SearchBar 
+                      onSearch={handleSearch}
+                      onResultsChange={handleResultsChange}
+                      className="w-full"
+                      opacity={searchBarOpacity}
+                    />
+                  </div>
+                  
+                  {/* Filters button */}
+                  <div className="flex-shrink-0">
+                    <AnimatedControls 
+                      onFiltersChange={handleFiltersChange}
+                      showOnlyFilters={true}
+                    />
+                  </div>
+                </div>
+                
+                {/* Search results count */}
+                {hasSearched && (
+                  <div className="mt-2 text-center" style={{ opacity: searchBarOpacity }}>
+                    <span className="text-xs text-white/40 bg-black/20 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/10">
+                      {searchResults.length > 0 
+                        ? `Found ${searchResults.length} threat${searchResults.length === 1 ? '' : 's'}`
+                        : 'No threats found for your query'
+                      }
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Bottom branding - adjusted for mobile */}
+              <div className="absolute bottom-4 left-4 right-4 z-10 pointer-events-auto">
+                <div className="flex items-end justify-between">
+                  {/* Brand/Title */}
+                  <div className="text-white">
+                    <h1 className="text-xl font-bold mb-1 text-white drop-shadow-lg">
+                      MVP Index
+                    </h1>
+                    <p className="text-xs text-gray-300 max-w-xs leading-relaxed">
+                      Interactive Digital Threat Intelligence
+                    </p>
+                  </div>
+                  
+                  {/* Accessibility button */}
+                  <AccessibilityButton />
+                </div>
+                
+                {/* Gen Digital Branding */}
+                <div className="text-center mt-2">
+                  <div className="text-xs text-gray-600">
+                    Powered by <span className="text-gray-400 font-medium">Gen Digital</span> Threat Labs
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </MobileNavigationSystem>
+      </>
+    )
+  }
+
+  // Handle loading and error states
   if (loading || error) {
     return (
       <>
@@ -143,6 +292,7 @@ export default function HomePage() {
     )
   }
 
+  // Desktop layout (existing layout)
   return (
     <>
       <AppLoader 
@@ -151,73 +301,78 @@ export default function HomePage() {
         loadingSteps={loadingSteps}
       />
       <div className={`relative w-screen h-screen overflow-hidden bg-black transition-opacity duration-1000 ${isAppLoading ? 'opacity-0' : 'opacity-100'}`}>
-      {/* Full-screen Globe Background */}
-      <div className="absolute inset-0 w-full h-full">
-        <InteractiveGlobe 
-          className="w-full h-full" 
-          dataPoints={filteredDataPoints}
-          onZoomChange={handleZoomChange}
-          onReady={() => markStepComplete('shaders')}
-        />
-      </div>
-      
-      {/* Top Navigation Bar */}
-      <div className="absolute top-6 left-6 right-6 z-10 flex items-center justify-between">
-        {/* Left - Filters Button */}
-        <div className="flex-shrink-0 w-24 flex justify-start" style={{ marginTop: '8px' }}>
-          <AnimatedControls 
-            onFiltersChange={handleFiltersChange}
-            showOnlyFilters={true}
+        {/* Full-screen Globe Background */}
+        <div className="absolute inset-0 w-full h-full">
+          <InteractiveGlobe 
+            className="w-full h-full" 
+            dataPoints={filteredDataPoints}
+            onZoomChange={handleZoomChange}
+            onReady={() => markStepComplete('shaders')}
           />
         </div>
         
-        {/* Center - Search Bar */}
-        <div className="absolute left-1/2 top-0 transform -translate-x-1/2 w-full max-w-4xl px-12">
-          <SearchBar 
-            onSearch={handleSearch}
-            onResultsChange={handleResultsChange}
-            className="w-full"
-            opacity={searchBarOpacity}
-          />
+        {/* Top Navigation Bar */}
+        <div className="absolute top-6 left-6 right-6 z-10 flex items-center justify-between">
+          {/* Left - Filters Button */}
+          <div className="flex-shrink-0 w-24 flex justify-start" style={{ marginTop: '8px' }}>
+            <AnimatedControls 
+              onFiltersChange={handleFiltersChange}
+              showOnlyFilters={true}
+            />
+          </div>
           
-          {/* Search results count */}
-          {hasSearched && (
-            <div className="mt-2 text-center" style={{ opacity: searchBarOpacity }}>
-              <span className="text-xs text-white/40 bg-black/20 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/10">
-                {searchResults.length > 0 
-                  ? `Found ${searchResults.length} threat${searchResults.length === 1 ? '' : 's'}`
-                  : 'No threats found for your query'
-                }
-              </span>
-            </div>
-          )}
+          {/* Center - Search Bar */}
+          <div className="absolute left-1/2 top-0 transform -translate-x-1/2 w-full max-w-4xl px-12">
+            <SearchBar 
+              onSearch={handleSearch}
+              onResultsChange={handleResultsChange}
+              className="w-full"
+              opacity={searchBarOpacity}
+            />
+            
+            {/* Search results count */}
+            {hasSearched && (
+              <div className="mt-2 text-center" style={{ opacity: searchBarOpacity }}>
+                <span className="text-xs text-white/40 bg-black/20 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/10">
+                  {searchResults.length > 0 
+                    ? `Found ${searchResults.length} threat${searchResults.length === 1 ? '' : 's'}`
+                    : 'No threats found for your query'
+                  }
+                </span>
+              </div>
+            )}
+          </div>
+          
+          {/* Right - Controls Button */}
+          <div className="flex-shrink-0 w-24 flex justify-end" style={{ marginTop: '8px' }}>
+            <AnimatedControls 
+              onFiltersChange={handleFiltersChange}
+              showOnlyControls={true}
+            />
+          </div>
         </div>
         
-        {/* Right - Controls Button */}
-        <div className="flex-shrink-0 w-24 flex justify-end" style={{ marginTop: '8px' }}>
-          <AnimatedControls 
-            onFiltersChange={handleFiltersChange}
-            showOnlyControls={true}
-          />
+        {/* Bottom Left - Brand/Title */}
+        <div className="absolute bottom-6 left-6 z-10 text-white">
+          <h1 className="text-3xl font-bold mb-2 text-white drop-shadow-lg">
+            MVP Index
+          </h1>
+          <p className="text-sm text-gray-300 max-w-xs leading-relaxed">
+            The Most Vulnerable Planet: An Interactive Visualization of Digital Threat Intelligence
+          </p>
         </div>
-      </div>
-      
-      {/* Bottom Left - Brand/Title */}
-      <div className="absolute bottom-6 left-6 z-10 text-white">
-        <h1 className="text-3xl font-bold mb-2 text-white drop-shadow-lg">
-          MVP Index
-        </h1>
-        <p className="text-sm text-gray-300 max-w-xs leading-relaxed">
-          The Most Vulnerable Planet: An Interactive Visualization of Digital Threat Intelligence
-        </p>
-      </div>
-      
-      {/* Bottom Center - Gen Digital Branding */}
-      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10">
-        <div className="text-xs text-gray-600 text-center">
-          Powered by <span className="text-gray-400 font-medium">Gen Digital</span> Threat Labs
+        
+        {/* Bottom Right - Accessibility Button */}
+        <div className="absolute bottom-6 right-6 z-10">
+          <AccessibilityButton />
         </div>
-      </div>
+        
+        {/* Bottom Center - Gen Digital Branding */}
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10">
+          <div className="text-xs text-gray-600 text-center">
+            Powered by <span className="text-gray-400 font-medium">Gen Digital</span> Threat Labs
+          </div>
+        </div>
       </div>
     </>
   )

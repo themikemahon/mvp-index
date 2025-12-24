@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ThreatFilters, ThreatType } from '@/types/threat';
+import { useResponsive } from '@/hooks/useResponsive';
 
 interface FilterPanelProps {
   onFiltersChange: (filters: ThreatFilters) => void;
@@ -12,6 +13,8 @@ interface FilterPanelProps {
     topics: string[];
   };
   className?: string;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 interface FilterSection {
@@ -42,10 +45,14 @@ export default function FilterPanel({
   onFiltersChange,
   initialFilters = {},
   availableOptions = { regions: [], brands: [], topics: [] },
-  className = ""
+  className = "",
+  isOpen = true,
+  onClose
 }: FilterPanelProps) {
+  const { isMobile, isTablet, config } = useResponsive();
   const [filters, setFilters] = useState<ThreatFilters>(initialFilters);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [showFilterSummary, setShowFilterSummary] = useState(false);
 
   // Debounce filter changes to prevent excessive re-renders
   const debouncedFilters = useDebounce(filters, 150);
@@ -165,10 +172,281 @@ export default function FilterPanel({
 
   const activeCount = useMemo(() => getActiveFilterCount(), [getActiveFilterCount]);
 
+  // Handle escape key for mobile modal
+  useEffect(() => {
+    if (isMobile && isOpen) {
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && onClose) {
+          onClose();
+        }
+      };
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isMobile, isOpen, onClose]);
+
+  // Prevent body scroll when mobile modal is open
+  useEffect(() => {
+    if (isMobile && isOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isMobile, isOpen]);
+
+  // Clear all filters with confirmation on mobile
+  const handleClearAll = useCallback(() => {
+    if (isMobile && activeCount > 3) {
+      // Show confirmation for mobile when many filters are active
+      if (window.confirm('Clear all filters?')) {
+        resetFilters();
+      }
+    } else {
+      resetFilters();
+    }
+  }, [isMobile, activeCount, resetFilters]);
+
+  // Toggle filter summary on mobile
+  const toggleFilterSummary = useCallback(() => {
+    setShowFilterSummary(prev => !prev);
+  }, []);
+
+  // Get touch target size based on device
+  const touchTargetSize = config.layoutSettings.touchTargetSize;
+  const minTouchSize = Math.max(touchTargetSize, 44); // Ensure minimum 44px
+
+  // Render filter summary for mobile
+  const renderFilterSummary = () => {
+    if (!isMobile || activeCount === 0) return null;
+
+    const summaryItems = [];
+    
+    if (filters.threatTypes?.length) {
+      summaryItems.push(`${filters.threatTypes.length} threat type${filters.threatTypes.length > 1 ? 's' : ''}`);
+    }
+    if (filters.regions?.length) {
+      summaryItems.push(`${filters.regions.length} region${filters.regions.length > 1 ? 's' : ''}`);
+    }
+    if (filters.brands?.length) {
+      summaryItems.push(`${filters.brands.length} brand${filters.brands.length > 1 ? 's' : ''}`);
+    }
+    if (filters.topics?.length) {
+      summaryItems.push(`${filters.topics.length} topic${filters.topics.length > 1 ? 's' : ''}`);
+    }
+    if (filters.severityMin !== undefined || filters.severityMax !== undefined) {
+      summaryItems.push('severity range');
+    }
+
+    return (
+      <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-blue-400 text-sm font-medium">Active Filters</span>
+          <button
+            onClick={toggleFilterSummary}
+            className="text-blue-400 text-xs"
+            style={{ minHeight: `${minTouchSize}px`, minWidth: `${minTouchSize}px` }}
+          >
+            {showFilterSummary ? 'Hide' : 'Show'} Details
+          </button>
+        </div>
+        
+        {showFilterSummary ? (
+          <div className="space-y-1">
+            {summaryItems.map((item, index) => (
+              <div key={index} className="text-white/80 text-xs">• {item}</div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-white/60 text-xs">
+            {summaryItems.join(', ')}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Mobile full-screen modal
+  if (isMobile) {
+    return (
+      <>
+        {/* Mobile Modal Overlay */}
+        {isOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm">
+            <div className="flex flex-col h-full bg-black/90">
+              {/* Mobile Header */}
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-white font-semibold text-lg">Filters</h2>
+                  {activeCount > 0 && (
+                    <span className="px-3 py-1 bg-blue-500/20 text-blue-400 text-sm rounded-full border border-blue-500/30">
+                      {activeCount}
+                    </span>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {activeCount > 0 && (
+                    <button
+                      onClick={handleClearAll}
+                      className="px-4 py-2 text-sm text-red-400 hover:text-red-300 transition-colors border border-red-500/30 rounded-lg"
+                      style={{ minHeight: `${minTouchSize}px` }}
+                    >
+                      Clear All
+                    </button>
+                  )}
+                  <button
+                    onClick={onClose}
+                    className="p-2 text-white/60 hover:text-white transition-colors"
+                    style={{ minHeight: `${minTouchSize}px`, minWidth: `${minTouchSize}px` }}
+                    aria-label="Close filters"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile Content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                {renderFilterSummary()}
+
+                {/* Threat Types */}
+                <div>
+                  <h3 className="text-white font-medium mb-4 text-lg">Threat Types</h3>
+                  <div className="space-y-3">
+                    {threatTypes.map(({ value, label, color }) => (
+                      <label key={value} className="flex items-center gap-4 cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={filters.threatTypes?.includes(value) || false}
+                          onChange={(e) => handleThreatTypeChange(value, e.target.checked)}
+                          className="w-5 h-5 rounded border-white/20 bg-black/20 text-blue-500"
+                          style={{ minHeight: `${Math.max(minTouchSize * 0.4, 20)}px`, minWidth: `${Math.max(minTouchSize * 0.4, 20)}px` }}
+                        />
+                        <span className={`text-base px-3 py-2 rounded border ${color} flex-1`}>
+                          {label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Severity Range */}
+                <div>
+                  <h3 className="text-white font-medium mb-4 text-lg">Severity Range</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-base text-white/80 mb-2">Minimum Severity</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={filters.severityMin || 1}
+                        onChange={(e) => handleSeverityChange('min', parseInt(e.target.value))}
+                        className="w-full h-3 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                        style={{ minHeight: `${minTouchSize}px` }}
+                      />
+                      <div className="flex justify-between text-sm text-white/60 mt-2">
+                        <span>1</span>
+                        <span className="text-white font-medium">{filters.severityMin || 1}</span>
+                        <span>10</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-base text-white/80 mb-2">Maximum Severity</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={filters.severityMax || 10}
+                        onChange={(e) => handleSeverityChange('max', parseInt(e.target.value))}
+                        className="w-full h-3 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                        style={{ minHeight: `${minTouchSize}px` }}
+                      />
+                      <div className="flex justify-between text-sm text-white/60 mt-2">
+                        <span>1</span>
+                        <span className="text-white font-medium">{filters.severityMax || 10}</span>
+                        <span>10</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Collapsible Multi-select sections */}
+                {filterSections.map((section) => (
+                  <div key={section.key}>
+                    <button
+                      className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-white/5 transition-colors"
+                      onClick={() => toggleSection(section.key)}
+                      style={{ minHeight: `${minTouchSize}px` }}
+                    >
+                      <h3 className="text-white font-medium text-lg">{section.title}</h3>
+                      <div className="flex items-center gap-2">
+                        {(filters[section.key] as string[])?.length > 0 && (
+                          <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full border border-blue-500/30">
+                            {(filters[section.key] as string[]).length}
+                          </span>
+                        )}
+                        <svg 
+                          className={`w-5 h-5 text-white/60 transition-transform duration-200 ${
+                            expandedSections.has(section.key) ? 'rotate-180' : ''
+                          }`}
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+                    
+                    <div className={`overflow-hidden transition-all duration-300 ${
+                      expandedSections.has(section.key) ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                    }`}>
+                      <div className="pt-2 pb-4 space-y-2 max-h-80 overflow-y-auto">
+                        {section.options.map((option) => (
+                          <label key={option} className="flex items-center gap-4 cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={(filters[section.key] as string[])?.includes(option) || false}
+                              onChange={(e) => handleMultiSelectChange(section.key, option, e.target.checked)}
+                              className="w-5 h-5 rounded border-white/20 bg-black/20 text-blue-500"
+                              style={{ minHeight: `${Math.max(minTouchSize * 0.4, 20)}px`, minWidth: `${Math.max(minTouchSize * 0.4, 20)}px` }}
+                            />
+                            <span className="text-base text-white/80 flex-1">{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mobile Footer */}
+              <div className="p-4 border-t border-white/10">
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                  style={{ minHeight: `${minTouchSize}px` }}
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // Tablet and Desktop Layout
   return (
     <div className={`${className}`}>
-      {/* Expanded Filter Panel */}
-      <div className="bg-black/50 backdrop-blur-sm border border-white/20 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] w-80">
+      <div className={`bg-black/50 backdrop-blur-sm border border-white/20 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${
+        isTablet ? 'w-96' : 'w-80'
+      }`}>
         {/* Header */}
         <div className="p-6 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -182,9 +460,10 @@ export default function FilterPanel({
           {activeCount > 0 && (
             <button
               onClick={resetFilters}
-              className="px-2 py-1 text-xs text-white/60 hover:text-white transition-colors"
+              className="px-3 py-2 text-xs text-white/60 hover:text-white transition-colors rounded border border-white/20 hover:border-white/40"
+              style={{ minHeight: `${Math.max(minTouchSize * 0.8, 32)}px` }}
             >
-              Clear
+              Clear All
             </button>
           )}
         </div>
@@ -196,12 +475,12 @@ export default function FilterPanel({
             <h4 className="text-white/80 font-medium mb-3 text-base">Threat Types</h4>
             <div className="space-y-2">
               {threatTypes.map(({ value, label, color }) => (
-                <label key={value} className="flex items-center gap-3 cursor-pointer">
+                <label key={value} className="flex items-center gap-3 cursor-pointer p-1 rounded hover:bg-white/5 transition-colors">
                   <input
                     type="checkbox"
                     checked={filters.threatTypes?.includes(value) || false}
                     onChange={(e) => handleThreatTypeChange(value, e.target.checked)}
-                    className="w-4 h-4 rounded border-white/20 bg-black/20 text-blue-500 focus:ring-blue-500/50"
+                    className="w-4 h-4 rounded border-white/20 bg-black/20 text-blue-500"
                   />
                   <span className={`text-sm px-2 py-1 rounded border ${color}`}>
                     {label}
@@ -250,41 +529,51 @@ export default function FilterPanel({
             </div>
           </div>
 
-          {/* Multi-select sections */}
+          {/* Multi-select sections with enhanced touch targets for tablet */}
           {filterSections.map((section) => (
             <div key={section.key}>
-              <div 
-                className="flex items-center justify-between cursor-pointer mb-3"
+              <button 
+                className="flex items-center justify-between w-full cursor-pointer mb-3 p-2 rounded hover:bg-white/5 transition-colors"
                 onClick={() => toggleSection(section.key)}
+                style={{ minHeight: `${isTablet ? Math.max(minTouchSize * 0.9, 40) : 'auto'}px` }}
               >
                 <h4 className="text-white/80 font-medium text-base">{section.title}</h4>
-                <svg 
-                  className={`w-4 h-4 text-white/60 transition-transform ${
-                    expandedSections.has(section.key) ? 'rotate-180' : ''
-                  }`}
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
+                <div className="flex items-center gap-2">
+                  {(filters[section.key] as string[])?.length > 0 && (
+                    <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full border border-blue-500/30">
+                      {(filters[section.key] as string[]).length}
+                    </span>
+                  )}
+                  <svg 
+                    className={`w-4 h-4 text-white/60 transition-transform duration-200 ${
+                      expandedSections.has(section.key) ? 'rotate-180' : ''
+                    }`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
               
-              {expandedSections.has(section.key) && (
-                <div className="space-y-2 max-h-32 overflow-y-auto">
+              <div className={`overflow-hidden transition-all duration-300 ${
+                expandedSections.has(section.key) ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+              }`}>
+                <div className="space-y-2 max-h-32 overflow-y-auto pb-2">
                   {section.options.map((option) => (
-                    <label key={option} className="flex items-center gap-3 cursor-pointer">
+                    <label key={option} className="flex items-center gap-3 cursor-pointer p-1 rounded hover:bg-white/5 transition-colors">
                       <input
                         type="checkbox"
                         checked={(filters[section.key] as string[])?.includes(option) || false}
                         onChange={(e) => handleMultiSelectChange(section.key, option, e.target.checked)}
-                        className="w-4 h-4 rounded border-white/20 bg-black/20 text-blue-500 focus:ring-blue-500/50"
+                        className="w-4 h-4 rounded border-white/20 bg-black/20 text-blue-500"
                       />
                       <span className="text-sm text-white/80">{option}</span>
                     </label>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
           ))}
         </div>

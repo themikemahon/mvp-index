@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ThreatFilters } from '@/types/threat';
 import FilterPanel from './FilterPanel';
+import { useResponsive } from '@/hooks/useResponsive';
 
 interface AnimatedControlsProps {
   onFiltersChange: (filters: ThreatFilters) => void;
@@ -80,11 +81,16 @@ export default function AnimatedControls({
   showOnlyControls = false,
   className = "" 
 }: AnimatedControlsProps) {
+  const { isMobile } = useResponsive();
   const [showFilters, setShowFilters] = useState(false);
   const [showControls, setShowControls] = useState(false);
 
   const handleFiltersClick = () => {
     setShowFilters(!showFilters);
+  };
+
+  const handleFiltersClose = () => {
+    setShowFilters(false);
   };
 
   const handleControlsClick = () => {
@@ -109,10 +115,12 @@ export default function AnimatedControls({
         
         {/* Filters Panel */}
         {showFilters && (
-          <div className="absolute top-16 left-0">
+          <div className={isMobile ? "" : "absolute top-16 left-0"}>
             <FilterPanel 
               onFiltersChange={onFiltersChange}
-              className="w-80"
+              className={isMobile ? "" : "w-80"}
+              isOpen={showFilters}
+              onClose={handleFiltersClose}
             />
           </div>
         )}
@@ -175,10 +183,12 @@ export default function AnimatedControls({
           
           {/* Filters Panel */}
           {showFilters && (
-            <div className="absolute top-16 left-0">
+            <div className={isMobile ? "" : "absolute top-16 left-0"}>
               <FilterPanel 
                 onFiltersChange={onFiltersChange}
-                className="w-80"
+                className={isMobile ? "" : "w-80"}
+                isOpen={showFilters}
+                onClose={handleFiltersClose}
               />
             </div>
           )}

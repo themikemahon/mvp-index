@@ -2,9 +2,11 @@
 
 import { useState, useCallback, useRef, useMemo } from 'react'
 import { GlobeRenderer } from './GlobeRenderer'
-import { DataPointDetail } from './DataPointDetail'
-import { OverlappingPointsSelector } from './OverlappingPointsSelector'
+import { MobileOptimizedGlobeRenderer } from './MobileOptimizedGlobeRenderer'
+import { ResponsiveDataPointDetail } from './ResponsiveDataPointDetail'
+import { ResponsiveOverlappingPointsSelector } from './ResponsiveOverlappingPointsSelector'
 import { useFilters } from '@/hooks/useFilters'
+import { useResponsive, useDeviceCapabilities } from '@/hooks/useResponsive'
 import { ThreatDataPoint, ThreatFilters } from '@/types/threat'
 
 export interface InteractiveGlobeProps {
@@ -20,6 +22,10 @@ export function InteractiveGlobe({
   onZoomChange,
   onReady
 }: InteractiveGlobeProps) {
+  // Responsive layout detection
+  const { isMobile, isTablet } = useResponsive()
+  const deviceCapabilities = useDeviceCapabilities()
+  
   // State for data point interactions
   const [selectedDataPoint, setSelectedDataPoint] = useState<ThreatDataPoint | null>(null)
   const [hoveredDataPoint, setHoveredDataPoint] = useState<ThreatDataPoint | null>(null)
@@ -30,6 +36,11 @@ export function InteractiveGlobe({
   
   // Ref for globe renderer to access navigation methods
   const globeRef = useRef<any>(null)
+
+  // Determine which renderer to use based on device capabilities
+  const shouldUseMobileRenderer = useMemo(() => {
+    return isMobile || isTablet || deviceCapabilities.tier === 'low'
+  }, [isMobile, isTablet, deviceCapabilities.tier])
 
   // Memoize the filter change callback to prevent unnecessary re-renders
   const handleFiltersChange = useCallback((newFilters: ThreatFilters, newFilteredData: ThreatDataPoint[]) => {
@@ -78,8 +89,9 @@ export function InteractiveGlobe({
       setShowOverlapSelector(true)
       setShowDetailPanel(false)
     } else {
-      // Single point - show details directly
+      // Single point - show details directly with related threats
       setSelectedDataPoint(dataPoint)
+      setOverlappingPoints(overlapping) // Store as related threats
       setShowDetailPanel(true)
       setShowOverlapSelector(false)
     }
@@ -92,9 +104,24 @@ export function InteractiveGlobe({
 
   // Handle overlapping point selection
   const handleOverlappingPointSelect = useCallback((dataPoint: ThreatDataPoint) => {
+    // Find related threats (other overlapping points)
+    const threshold = 0.01
+    const related = displayData.filter(point => 
+      point.id !== dataPoint.id &&
+      Math.abs(point.coordinates.latitude - dataPoint.coordinates.latitude) < threshold &&
+      Math.abs(point.coordinates.longitude - dataPoint.coordinates.longitude) < threshold
+    )
+    
     setSelectedDataPoint(dataPoint)
+    setOverlappingPoints(related) // Store as related threats
     setShowOverlapSelector(false)
     setShowDetailPanel(true)
+  }, [displayData])
+
+  // Handle navigation to a different threat from the detail panel
+  const handleNavigateToThreat = useCallback((threat: ThreatDataPoint) => {
+    setSelectedDataPoint(threat)
+    // Keep the same related threats since we're navigating within the same location
   }, [])
 
   // Handle closing panels
@@ -138,15 +165,26 @@ export function InteractiveGlobe({
         </div>
       )}
 
-      {/* Main Globe Renderer */}
-      <GlobeRenderer
-        ref={globeRef}
-        dataPoints={displayData}
-        onDataPointClick={handleDataPointClick}
-        onDataPointHover={handleDataPointHover}
-        onZoomChange={onZoomChange}
-        onReady={onReady}
-      />
+      {/* Main Globe Renderer - Adaptive based on device capabilities */}
+      {shouldUseMobileRenderer ? (
+        <MobileOptimizedGlobeRenderer
+          ref={globeRef}
+          dataPoints={displayData}
+          onDataPointClick={handleDataPointClick}
+          onDataPointHover={handleDataPointHover}
+          onZoomChange={onZoomChange}
+          onReady={onReady}
+        />
+      ) : (
+        <GlobeRenderer
+          ref={globeRef}
+          dataPoints={displayData}
+          onDataPointClick={handleDataPointClick}
+          onDataPointHover={handleDataPointHover}
+          onZoomChange={onZoomChange}
+          onReady={onReady}
+        />
+      )}
 
       {/* Hover Tooltip */}
       {hoveredDataPoint && !showDetailPanel && !showOverlapSelector && (
@@ -162,7 +200,7 @@ export function InteractiveGlobe({
       )}
 
       {/* Overlapping Points Selector */}
-      <OverlappingPointsSelector
+      <ResponsiveOverlappingPointsSelector
         dataPoints={overlappingPoints}
         isVisible={showOverlapSelector}
         onSelect={handleOverlappingPointSelect}
@@ -171,10 +209,12 @@ export function InteractiveGlobe({
       />
 
       {/* Data Point Detail Panel */}
-      <DataPointDetail
+      <ResponsiveDataPointDetail
         dataPoint={selectedDataPoint}
+        relatedThreats={overlappingPoints}
         isVisible={showDetailPanel}
         onClose={handleCloseDetailPanel}
+        onNavigateToThreat={handleNavigateToThreat}
         position={interactionPosition}
       />
 

@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { QueryProcessingResponse, ThreatDataPoint } from '@/types/threat';
+import { VoiceSearchManager } from '@/utils/voiceControl';
+import { useResponsive, useDeviceCapabilities } from '@/hooks/useResponsive';
+import { aria, touchTarget, focus } from '@/utils/accessibility';
 
 interface SearchBarProps {
   onSearch: (query: string, results: ThreatDataPoint[]) => void;
@@ -29,10 +32,44 @@ export default function SearchBar({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const [voiceSearchManager, setVoiceSearchManager] = useState<VoiceSearchManager | null>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { isMobile } = useResponsive();
+  const deviceCapabilities = useDeviceCapabilities();
+
+  // Initialize voice search
+  useEffect(() => {
+    if (deviceCapabilities.hasVoiceSupport) {
+      const voiceManager = new VoiceSearchManager({
+        onResult: (transcript) => {
+          setQuery(transcript);
+          setShowSuggestions(false);
+          handleSearch(transcript);
+        },
+        onError: (error) => {
+          setError(`Voice search error: ${error}`);
+          setIsVoiceListening(false);
+        },
+        onStart: () => {
+          setIsVoiceListening(true);
+          setError(null);
+        },
+        onEnd: () => {
+          setIsVoiceListening(false);
+        },
+      });
+      
+      setVoiceSearchManager(voiceManager);
+      
+      return () => {
+        voiceManager.destroy();
+      };
+    }
+  }, [deviceCapabilities.hasVoiceSupport]);
 
   // Handle clicking outside to close suggestions
   const handleClickOutside = useCallback((event: MouseEvent) => {
@@ -212,6 +249,16 @@ export default function SearchBar({
     // The click outside handler will manage closing suggestions
   };
 
+  const handleVoiceSearch = () => {
+    if (!voiceSearchManager) return;
+    
+    if (isVoiceListening) {
+      voiceSearchManager.stopListening();
+    } else {
+      voiceSearchManager.startListening();
+    }
+  };
+
   const getSuggestionIcon = (type: SearchSuggestion['type']) => {
     switch (type) {
       case 'recent':
@@ -274,34 +321,82 @@ export default function SearchBar({
               }
             }}
             placeholder={placeholder}
-            className="w-full h-16 px-7 pr-16 text-[17px] text-white/95 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full focus:outline-none focus:border-white/30 placeholder-white/40 transition-all duration-200 shadow-[0_0_15px_rgba(0,0,0,0.3)] hover:border-white/30"
+            className={`
+              w-full ${isMobile ? 'h-14 px-6 pr-20 text-base' : 'h-16 px-7 pr-16 text-[17px]'} 
+              text-white/95 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full 
+              ${focus.ring} placeholder-white/40 transition-all duration-200 
+              shadow-[0_0_15px_rgba(0,0,0,0.3)] hover:border-white/30
+              ${touchTarget.classes.minimum}
+            `}
             disabled={isLoading}
+            {...aria.button('Search for cyber threats', { describedBy: 'search-help' })}
           />
 
+          {/* Voice search button */}
+          {deviceCapabilities.hasVoiceSupport && (
+            <button
+              type="button"
+              onClick={handleVoiceSearch}
+              className={`
+                absolute ${isMobile ? 'right-12 top-1/2 -translate-y-1/2' : 'right-14 top-1/2 -translate-y-1/2'}
+                w-8 h-8 flex items-center justify-center rounded-full transition-all duration-200
+                ${isVoiceListening 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
+                }
+                ${focus.ring} ${touchTarget.classes.compact}
+              `}
+              disabled={isLoading}
+              {...aria.button(isVoiceListening ? 'Stop voice search' : 'Start voice search')}
+            >
+              {isVoiceListening ? (
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 6h12v12H6z"/>
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              )}
+            </button>
+          )}
+
           {/* Submit button - perfectly centered */}
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <div className={`absolute ${isMobile ? 'right-2' : 'right-2'} top-1/2 -translate-y-1/2`}>
             {isLoading ? (
-              <div className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10">
+              <div className={`${isMobile ? 'w-8 h-8' : 'w-10 h-10'} flex items-center justify-center rounded-full bg-white/10`}>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               </div>
             ) : query.trim() ? (
               <button
                 type="submit"
-                className="w-10 h-10 flex items-center justify-center bg-white text-black rounded-full hover:bg-white/90 transition-all duration-200 shadow-lg active:scale-95"
+                className={`
+                  ${isMobile ? 'w-8 h-8' : 'w-10 h-10'} flex items-center justify-center 
+                  bg-white text-black rounded-full hover:bg-white/90 transition-all duration-200 
+                  shadow-lg active:scale-95 ${focus.ring} ${touchTarget.classes.minimum}
+                `}
                 disabled={isLoading}
+                {...aria.button('Submit search')}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                 </svg>
               </button>
             ) : (
-              <div className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-white/20">
+              <div className={`${isMobile ? 'w-8 h-8' : 'w-10 h-10'} flex items-center justify-center rounded-full bg-white/5 text-white/20`}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                 </svg>
               </div>
             )}
           </div>
+        </div>
+
+        {/* Screen reader help text */}
+        <div id="search-help" className="sr-only">
+          Search for cyber threats, vulnerabilities, or security insights. 
+          {deviceCapabilities.hasVoiceSupport && ' Voice search is available.'}
+          Use arrow keys to navigate suggestions.
         </div>
 
         {/* Error message */}
@@ -318,11 +413,14 @@ export default function SearchBar({
             <div 
               className="fixed inset-0 bg-black/10 backdrop-blur-[0.5px] z-40" 
               onClick={() => setShowSuggestions(false)}
+              aria-hidden="true"
             />
             
             <div 
               ref={suggestionsRef}
               className="absolute top-full left-0 right-0 mt-3 bg-black/40 backdrop-blur-sm border border-white/20 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-50 overflow-hidden"
+              role="listbox"
+              aria-label="Search suggestions"
             >
             {!query && (
               <>
@@ -337,7 +435,13 @@ export default function SearchBar({
                       key={`${suggestion.type}-${suggestion.text}-${index}`}
                       type="button"
                       onClick={() => handleSuggestionClick(suggestion)}
-                      className="w-full h-16 px-7 text-left text-white/90 hover:bg-white/[0.08] active:bg-white/[0.12] transition-all duration-150 flex items-center gap-4 group"
+                      className={`
+                        w-full ${isMobile ? 'h-14' : 'h-16'} px-7 text-left text-white/90 
+                        hover:bg-white/[0.08] active:bg-white/[0.12] transition-all duration-150 
+                        flex items-center gap-4 group ${focus.ring} ${touchTarget.classes.minimum}
+                      `}
+                      role="option"
+                      {...aria.button(`Search for ${suggestion.text}`)}
                     >
                       <div className="text-white/30 group-hover:text-white/50 transition-colors flex-shrink-0">{getSuggestionIcon(suggestion.type)}</div>
                       <span className="flex-1 text-[17px]">{suggestion.text}</span>
