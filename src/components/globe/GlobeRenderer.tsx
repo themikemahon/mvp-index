@@ -19,6 +19,7 @@ interface GlobeRendererProps {
   onDataPointClick?: (dataPoint: ThreatDataPoint) => void
   onDataPointHover?: (dataPoint: ThreatDataPoint | null) => void
   onZoomChange?: (distance: number) => void
+  onReady?: () => void
 }
 
 export interface GlobeRendererRef {
@@ -226,13 +227,15 @@ function Scene({
   onDataPointClick, 
   onDataPointHover,
   onZoomChange,
-  navigationRef
+  navigationRef,
+  onReady
 }: { 
   dataPoints?: ThreatDataPoint[]
   onDataPointClick?: (dataPoint: ThreatDataPoint) => void
   onDataPointHover?: (dataPoint: ThreatDataPoint | null) => void
   onZoomChange?: (distance: number) => void
   navigationRef?: React.RefObject<any>
+  onReady?: () => void
 }) {
   const [currentZoomLevel, setCurrentZoomLevel] = useState<ZoomLevel | null>(null)
   const [visualizationMode, setVisualizationMode] = useState<'heatmap' | 'pixels'>('heatmap')
@@ -275,6 +278,17 @@ function Scene({
   // Navigation function
   const navigateToLocation = useCallback((lat: number, lng: number, distance: number = 6) => {
     const targetPosition = latLngToVector3(lat, lng, distance)
+
+  // Call onReady when the scene is initialized
+  useEffect(() => {
+    if (onReady) {
+      // Add a small delay to ensure everything is properly initialized
+      const timer = setTimeout(() => {
+        onReady()
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [onReady])
     const endTarget = latLngToVector3(lat, lng, 0) // Look at the surface point
     
     // Animate camera to target position
@@ -397,7 +411,8 @@ export const GlobeRenderer = forwardRef<GlobeRendererRef, GlobeRendererProps>(({
   dataPoints, 
   onDataPointClick, 
   onDataPointHover,
-  onZoomChange
+  onZoomChange,
+  onReady
 }, ref) => {
   const navigationRef = useRef<any>({})
 
@@ -431,6 +446,7 @@ export const GlobeRenderer = forwardRef<GlobeRendererRef, GlobeRendererProps>(({
           onDataPointHover={onDataPointHover}
           onZoomChange={onZoomChange}
           navigationRef={navigationRef}
+          onReady={onReady}
         />
       </Canvas>
     </div>

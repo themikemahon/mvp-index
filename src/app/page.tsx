@@ -3,6 +3,8 @@
 import { InteractiveGlobe } from '@/components'
 import SearchBar from '@/components/ui/SearchBar'
 import AnimatedControls from '@/components/ui/AnimatedControls'
+import { AppLoader } from '@/components/ui/AppLoader'
+import { useAppLoader } from '@/hooks/useAppLoader'
 import { ThreatDataPoint, ThreatType, ThreatFilters } from '@/types/threat'
 import { useState, useEffect } from 'react'
 
@@ -14,6 +16,14 @@ export default function HomePage() {
   const [hasSearched, setHasSearched] = useState(false)
   const [searchBarOpacity, setSearchBarOpacity] = useState(1)
   const [filteredDataPoints, setFilteredDataPoints] = useState<ThreatDataPoint[]>([])
+  
+  // App loading state management
+  const { 
+    isLoading: isAppLoading, 
+    loadingSteps, 
+    markStepComplete, 
+    completeLoading 
+  } = useAppLoader()
 
   // Load threat data from Neon database
   useEffect(() => {
@@ -33,6 +43,8 @@ export default function HomePage() {
         if (data.success && data.data) {
           setThreatData(data.data)
           setFilteredDataPoints(data.data)
+          // Mark threats loading step as complete
+          markStepComplete('threats')
         } else {
           throw new Error('Invalid response format')
         }
@@ -45,7 +57,7 @@ export default function HomePage() {
     }
 
     loadThreatData()
-  }, [])
+  }, [markStepComplete])
 
   const handleSearch = (query: string, results: ThreatDataPoint[]) => {
     setSearchResults(results)
@@ -106,41 +118,46 @@ export default function HomePage() {
     setSearchBarOpacity(opacity)
   }
 
-  if (loading) {
+  if (loading || error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-black text-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Loading threat data from Neon database...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black text-white">
-        <div className="text-center">
-          <p className="text-red-400 mb-4">❌ Error loading data: {error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
+      <>
+        <AppLoader 
+          isVisible={isAppLoading}
+          onLoadComplete={completeLoading}
+          loadingSteps={loadingSteps}
+        />
+        {error && !isAppLoading && (
+          <div className="flex items-center justify-center min-h-screen bg-black text-white">
+            <div className="text-center">
+              <p className="text-red-400 mb-4">❌ Error loading data: {error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     )
   }
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black">
+    <>
+      <AppLoader 
+        isVisible={isAppLoading}
+        onLoadComplete={completeLoading}
+        loadingSteps={loadingSteps}
+      />
+      <div className={`relative w-screen h-screen overflow-hidden bg-black transition-opacity duration-1000 ${isAppLoading ? 'opacity-0' : 'opacity-100'}`}>
       {/* Full-screen Globe Background */}
       <div className="absolute inset-0 w-full h-full">
         <InteractiveGlobe 
           className="w-full h-full" 
           dataPoints={filteredDataPoints}
           onZoomChange={handleZoomChange}
+          onReady={() => markStepComplete('shaders')}
         />
       </div>
       
@@ -201,6 +218,7 @@ export default function HomePage() {
           Powered by <span className="text-gray-400 font-medium">Gen Digital</span> Threat Labs
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }

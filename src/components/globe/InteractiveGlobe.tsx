@@ -11,12 +11,14 @@ export interface InteractiveGlobeProps {
   className?: string
   dataPoints?: ThreatDataPoint[]
   onZoomChange?: (distance: number) => void
+  onReady?: () => void
 }
 
 export function InteractiveGlobe({ 
   className = '', 
   dataPoints = [],
-  onZoomChange
+  onZoomChange,
+  onReady
 }: InteractiveGlobeProps) {
   // State for data point interactions
   const [selectedDataPoint, setSelectedDataPoint] = useState<ThreatDataPoint | null>(null)
@@ -143,6 +145,7 @@ export function InteractiveGlobe({
         onDataPointClick={handleDataPointClick}
         onDataPointHover={handleDataPointHover}
         onZoomChange={onZoomChange}
+        onReady={onReady}
       />
 
       {/* Hover Tooltip */}
