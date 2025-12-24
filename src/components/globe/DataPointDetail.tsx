@@ -11,14 +11,30 @@ export interface DataPointDetailProps {
 }
 
 // Format date for display
-function formatDate(date: Date): string {
+function formatDate(date: Date | string | null | undefined): string {
+  if (!date) {
+    return 'Unknown';
+  }
+  
+  let dateObj: Date;
+  if (typeof date === 'string') {
+    dateObj = new Date(date);
+  } else {
+    dateObj = date;
+  }
+  
+  // Check if the date is valid
+  if (isNaN(dateObj.getTime())) {
+    return 'Invalid date';
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
-  }).format(date)
+  }).format(dateObj);
 }
 
 // Get threat type display name and styling
@@ -101,8 +117,28 @@ export function DataPointDetail({
     return null
   }
 
-  const threatTypeInfo = getThreatTypeInfo(dataPoint.threatType)
-  const severityInfo = getSeverityInfo(dataPoint.severity)
+  // Add safety checks for all data point properties
+  const safeDataPoint = {
+    ...dataPoint,
+    title: dataPoint.title || 'Unknown Threat',
+    subhead: dataPoint.subhead || '',
+    description: dataPoint.description || 'No description available',
+    coordinates: dataPoint.coordinates || { latitude: 0, longitude: 0 },
+    severity: dataPoint.severity || 0,
+    threatType: dataPoint.threatType || 'vulnerability',
+    region: dataPoint.region || '',
+    brands: dataPoint.brands || [],
+    topics: dataPoint.topics || [],
+    sources: dataPoint.sources || [],
+    createdAt: dataPoint.createdAt || new Date(),
+    updatedAt: dataPoint.updatedAt || new Date(),
+    expirationDate: dataPoint.expirationDate || null,
+    isQuantitative: dataPoint.isQuantitative || false,
+    statisticalData: dataPoint.statisticalData || null
+  }
+
+  const threatTypeInfo = getThreatTypeInfo(safeDataPoint.threatType)
+  const severityInfo = getSeverityInfo(safeDataPoint.severity)
 
   // Calculate position for the detail panel
   const panelStyle: React.CSSProperties = position ? {
@@ -140,11 +176,11 @@ export function DataPointDetail({
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 truncate">
-                {dataPoint.title}
+                {safeDataPoint.title}
               </h3>
-              {dataPoint.subhead && (
+              {safeDataPoint.subhead && (
                 <p className="text-sm text-gray-600 mt-1">
-                  {dataPoint.subhead}
+                  {safeDataPoint.subhead}
                 </p>
               )}
             </div>
@@ -165,7 +201,7 @@ export function DataPointDetail({
               {threatTypeInfo.label}
             </span>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${severityInfo.bgColor} ${severityInfo.color}`}>
-              Severity: {dataPoint.severity}/10 ({severityInfo.label})
+              Severity: {safeDataPoint.severity}/10 ({severityInfo.label})
             </span>
           </div>
         </div>
@@ -176,21 +212,38 @@ export function DataPointDetail({
           <div className="mb-4">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Description</h4>
             <p className="text-sm text-gray-700 leading-relaxed">
-              {dataPoint.description}
+              {safeDataPoint.description}
             </p>
           </div>
 
           {/* Statistical Data */}
-          {dataPoint.isQuantitative && dataPoint.statisticalData && (
+          {safeDataPoint.isQuantitative && safeDataPoint.statisticalData && (
             <div className="mb-4">
               <h4 className="text-sm font-medium text-gray-900 mb-2">Statistical Information</h4>
               <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-2xl font-bold text-gray-900">
-                  {dataPoint.statisticalData.value.toLocaleString()} {dataPoint.statisticalData.unit}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  {dataPoint.statisticalData.context}
-                </div>
+                {safeDataPoint.statisticalData.value !== undefined && safeDataPoint.statisticalData.unit ? (
+                  <div className="text-2xl font-bold text-gray-900">
+                    {safeDataPoint.statisticalData.value.toLocaleString()} {safeDataPoint.statisticalData.unit}
+                  </div>
+                ) : (
+                  <div className="text-lg font-semibold text-gray-900">
+                    Statistical Data Available
+                  </div>
+                )}
+                {safeDataPoint.statisticalData.context && (
+                  <div className="text-sm text-gray-600 mt-1">
+                    {safeDataPoint.statisticalData.context}
+                  </div>
+                )}
+                {/* Display any other statistical data as key-value pairs */}
+                {Object.entries(safeDataPoint.statisticalData).map(([key, value]) => {
+                  if (key === 'value' || key === 'unit' || key === 'context') return null;
+                  return (
+                    <div key={key} className="text-sm text-gray-700 mt-1">
+                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -200,20 +253,20 @@ export function DataPointDetail({
             <h4 className="text-sm font-medium text-gray-900 mb-2">Location</h4>
             <div className="text-sm text-gray-700">
               <div>
-                Coordinates: {dataPoint.coordinates.latitude.toFixed(4)}°, {dataPoint.coordinates.longitude.toFixed(4)}°
+                Coordinates: {safeDataPoint.coordinates.latitude.toFixed(4)}°, {safeDataPoint.coordinates.longitude.toFixed(4)}°
               </div>
-              {dataPoint.region && (
-                <div className="mt-1">Region: {dataPoint.region}</div>
+              {safeDataPoint.region && (
+                <div className="mt-1">Region: {safeDataPoint.region}</div>
               )}
             </div>
           </div>
 
           {/* Brands */}
-          {dataPoint.brands && dataPoint.brands.length > 0 && (
+          {safeDataPoint.brands && safeDataPoint.brands.length > 0 && (
             <div className="mb-4">
               <h4 className="text-sm font-medium text-gray-900 mb-2">Related Brands</h4>
               <div className="flex flex-wrap gap-1">
-                {dataPoint.brands.map((brand, index) => (
+                {safeDataPoint.brands.map((brand, index) => (
                   <span
                     key={index}
                     className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-700"
@@ -226,11 +279,11 @@ export function DataPointDetail({
           )}
 
           {/* Topics */}
-          {dataPoint.topics && dataPoint.topics.length > 0 && (
+          {safeDataPoint.topics && safeDataPoint.topics.length > 0 && (
             <div className="mb-4">
               <h4 className="text-sm font-medium text-gray-900 mb-2">Topics</h4>
               <div className="flex flex-wrap gap-1">
-                {dataPoint.topics.map((topic, index) => (
+                {safeDataPoint.topics.map((topic, index) => (
                   <span
                     key={index}
                     className="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-700"
@@ -243,11 +296,11 @@ export function DataPointDetail({
           )}
 
           {/* Sources */}
-          {dataPoint.sources && dataPoint.sources.length > 0 && (
+          {safeDataPoint.sources && safeDataPoint.sources.length > 0 && (
             <div className="mb-4">
               <h4 className="text-sm font-medium text-gray-900 mb-2">Sources</h4>
               <div className="space-y-1">
-                {dataPoint.sources.map((source, index) => (
+                {safeDataPoint.sources.map((source, index) => (
                   <div key={index} className="text-sm text-gray-600">
                     {source.startsWith('http') ? (
                       <a
@@ -272,16 +325,16 @@ export function DataPointDetail({
             <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
               <div>
                 <div className="font-medium">Created</div>
-                <div>{formatDate(dataPoint.createdAt)}</div>
+                <div>{formatDate(safeDataPoint.createdAt)}</div>
               </div>
               <div>
                 <div className="font-medium">Updated</div>
-                <div>{formatDate(dataPoint.updatedAt)}</div>
+                <div>{formatDate(safeDataPoint.updatedAt)}</div>
               </div>
-              {dataPoint.expirationDate && (
+              {safeDataPoint.expirationDate && (
                 <div className="col-span-2">
                   <div className="font-medium">Expires</div>
-                  <div>{formatDate(dataPoint.expirationDate)}</div>
+                  <div>{formatDate(safeDataPoint.expirationDate)}</div>
                 </div>
               )}
             </div>

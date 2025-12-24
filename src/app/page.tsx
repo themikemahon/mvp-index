@@ -20,29 +20,24 @@ export default function HomePage() {
     async function loadThreatData() {
       try {
         setLoading(true)
-        console.log('🚀 Starting to load threat data from Neon...')
         
         // Load all threats globally
         const response = await fetch('/api/threats?bounds=-90,-180,90,180')
-        console.log('📡 API Response status:', response.status)
         
         if (!response.ok) {
           throw new Error(`Failed to load threats: ${response.status}`)
         }
         
         const data = await response.json()
-        console.log('📊 API Response data:', data)
         
         if (data.success && data.data) {
           setThreatData(data.data)
           setFilteredDataPoints(data.data)
-          console.log(`✅ SUCCESS: Loaded ${data.data.length} threats from Neon database`)
-          console.log('🔍 First threat:', data.data[0])
         } else {
           throw new Error('Invalid response format')
         }
       } catch (err) {
-        console.error('❌ FAILED to load threat data:', err)
+        console.error('Failed to load threat data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
         setLoading(false)
@@ -190,18 +185,14 @@ export default function HomePage() {
         </div>
       </div>
       
-      {/* Bottom Left - Brand/Title with Data Counter */}
+      {/* Bottom Left - Brand/Title */}
       <div className="absolute bottom-6 left-6 z-10 text-white">
         <h1 className="text-3xl font-bold mb-2 text-white drop-shadow-lg">
           MVP Index
         </h1>
-        <p className="text-sm text-gray-300 max-w-xs leading-relaxed mb-2">
+        <p className="text-sm text-gray-300 max-w-xs leading-relaxed">
           The Most Vulnerable Planet: An Interactive Visualization of Digital Threat Intelligence
         </p>
-        {/* Data Counter - Shows you're using real Neon data */}
-        <div className="text-xs text-green-400 bg-black/30 backdrop-blur-sm px-2 py-1 rounded border border-green-400/20">
-          📊 {threatData.length} threats loaded from Neon DB
-        </div>
       </div>
       
       {/* Bottom Center - Gen Digital Branding */}

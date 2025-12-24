@@ -22,6 +22,21 @@ function transformThreatRow(row: ThreatDataRow): ThreatDataPoint {
     };
   }
 
+  // Parse statistical data if it exists
+  let statisticalData = undefined;
+  if (row.statistical_data) {
+    try {
+      if (typeof row.statistical_data === 'string') {
+        statisticalData = JSON.parse(row.statistical_data);
+      } else {
+        statisticalData = row.statistical_data;
+      }
+    } catch (error) {
+      console.warn('Failed to parse statistical data:', error);
+      statisticalData = undefined;
+    }
+  }
+
   return {
     id: row.id,
     title: row.title,
@@ -34,11 +49,11 @@ function transformThreatRow(row: ThreatDataRow): ThreatDataPoint {
     brands: row.brands || [],
     topics: row.topics || [],
     isQuantitative: row.is_quantitative,
-    statisticalData: row.statistical_data || undefined,
+    statisticalData,
     sources: row.sources || [],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    expirationDate: row.expiration_date || undefined,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    expirationDate: row.expiration_date ? new Date(row.expiration_date) : undefined,
     isActive: row.is_active,
   };
 }
